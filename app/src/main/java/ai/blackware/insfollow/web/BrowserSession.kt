@@ -12,7 +12,7 @@ import ai.blackware.insfollow.model.Observation
 import org.json.JSONTokener
 import org.json.JSONObject
 
-class BrowserSession(private val activity: Activity, val events: Events) {
+class BrowserSession(private val activity: Activity, val events: Events) : ProfileBrowser {
     interface Events {
         fun started(url: String)
         fun finished()
@@ -74,10 +74,10 @@ class BrowserSession(private val activity: Activity, val events: Events) {
         }
     }
     fun setGuard(guard: () -> Boolean) { navigation=guard }
-    fun profile(key: String) { expected=Identity.normalize(key); view.loadUrl("https://www.instagram.com/$expected/") }
+    override fun profile(key: String) { expected=Identity.normalize(key); view.loadUrl("https://www.instagram.com/$expected/") }
     fun login() { expected=null; view.loadUrl("https://www.instagram.com/accounts/login/") }
     fun reload() { if(!destroyed) view.reload() }
-    fun inspect(key: String, result: (Observation) -> Unit) {
+    override fun inspect(key: String, result: (Observation) -> Unit) {
         if(destroyed) { result(Observation.UNKNOWN); return }
         val script=activity.resources.openRawResource(R.raw.inspect).bufferedReader().use { it.readText() }.replace("__EXPECTED__",JSONObject.quote(key))
         view.evaluateJavascript(script) { raw ->

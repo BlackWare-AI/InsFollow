@@ -5,14 +5,14 @@ import android.os.Looper
 import ai.blackware.insfollow.data.Store
 import ai.blackware.insfollow.model.*
 import ai.blackware.insfollow.queue.Schedule
-import ai.blackware.insfollow.web.BrowserSession
+import ai.blackware.insfollow.web.ProfileBrowser
 import java.time.LocalTime
 
 /** Follow execution is deliberately a separate user-only capability. */
 interface FollowExecutor { fun requestUserAction(account: String) }
 class AssistedWorkflow(
     private val store: Store,
-    private val browser: () -> BrowserSession?,
+    private val browser: () -> ProfileBrowser?,
     private val schedule: () -> Schedule?,
     private val executor: FollowExecutor,
     private val changed: (Stage,String) -> Unit,
@@ -31,6 +31,13 @@ class AssistedWorkflow(
     private var generation=0
     private var deadline=0L
     private var failures=0
+    private val stopReasons=setOf("ACTION_RESTRICTED","LOGIN_REQUIRED","RENDERER_GONE","NAVIGATION_BLOCKED")
+    private fun withStorageGuard(action: () -> Unit) {
+        try { action() } catch (_: android.database.SQLException) { storageFailure() }
+    }
+    private fun post(delay: Long, action: () -> Unit) {
+        handler.postDelayed({ withStorageGuard(action) },delay)
+    }
     private fun transition(next: Stage) { stage=next; work?.let { store.stage(it,next,afterAction) }; changed(next,work?.key.orEmpty()) }
     private fun allowed(): Boolean = active && expanded && schedule()?.allows(LocalTime.now())==true
     private fun guard(): Boolean {
@@ -57,7 +64,7 @@ class AssistedWorkflow(
     private fun tick() {
         if(!running) return
         if(!guard()) return
-        handler.postDelayed({ tick() },1000)
+        post(1000) { tick() }
     }
     private fun next() {
         if(!running || !guard()) return
@@ -65,7 +72,7 @@ class AssistedWorkflow(
         val config=schedule() ?: run { pause(); return }
         if(config.limit>0 && store.countProcessed(id)>=config.limit) { pause(); message("SESSION_LIMIT"); return }
         val wait=store.nextAt(id)-System.currentTimeMillis()
-        if(wait>0) { transition(Stage.QUEUED); handler.postDelayed({ if(running) next() },wait.coerceAtMost(1000)); return }
+        if(wait>0) { transition(Stage.QUEUED); post(wait.coerceAtMost(1000)) { if(running) next() }; return }
         work=store.acquire(id)
         if(work==null) { complete(); return }
         afterAction=false; refreshed=false; candidate=null
@@ -77,10 +84,10 @@ class AssistedWorkflow(
         transition(if(refreshed) Stage.VERIFYING_RESULT else Stage.WAITING_FOR_PAGE)
         val token=generation
         // The deadline must also fire when a renderer never returns the JavaScript callback.
-        handler.postDelayed({
+        post(pageTimeoutMs) {
             if(token==generation && running && allowed()) fail("VERIFICATION_TIMEOUT")
-        },pageTimeoutMs)
-        handler.postDelayed({ poll(token) },1200)
+        }
+        post(1200) { poll(token) }
     }
     private fun poll(token: Int) {
         if(token!=generation || !running || !guard()) return
@@ -88,44 +95,48 @@ class AssistedWorkflow(
         val current=work ?: return
         transition(if(refreshed) Stage.VERIFYING_RESULT else Stage.INSPECTING_PROFILE)
         browser()?.inspect(current.key) { observation ->
-            if(token!=generation || !running || !allowed()) return@inspect
-            if(observation==Observation.LOGIN || observation==Observation.RESTRICTED) {
-                settle(Results.decide(observation,afterAction),observation.name,false)
-                message(if(observation==Observation.LOGIN) "LOGIN_REQUIRED" else "ACTION_RESTRICTED"); return@inspect
-            }
-            if(observation==Observation.UNKNOWN) { candidate=null; handler.postDelayed({ poll(token) },1000); return@inspect }
-            if(candidate!=observation) { candidate=observation; handler.postDelayed({ poll(token) },1000); return@inspect }
-            if(!refreshed && observation==Observation.FOLLOW) {
-                generation++; transition(Stage.READY_FOR_ACTION); afterAction=true
-                transition(Stage.AWAITING_USER_ACTION); executor.requestUserAction(current.key)
-                watchUserAction(generation)
-            } else if(!refreshed) {
-                refreshed=true; refresh()
-            } else {
-                failures=0
-                settle(Results.decide(observation,afterAction),observation.name,true)
+            withStorageGuard {
+                if(token!=generation || !running || !allowed()) return@withStorageGuard
+                if(observation==Observation.LOGIN || observation==Observation.RESTRICTED) {
+                    settle(Results.decide(observation,afterAction),observation.name,false)
+                    message(if(observation==Observation.LOGIN) "LOGIN_REQUIRED" else "ACTION_RESTRICTED"); return@withStorageGuard
+                }
+                if(observation==Observation.UNKNOWN) { candidate=null; post(1000) { poll(token) }; return@withStorageGuard }
+                if(candidate!=observation) { candidate=observation; post(1000) { poll(token) }; return@withStorageGuard }
+                if(!refreshed && observation==Observation.FOLLOW) {
+                    generation++; transition(Stage.READY_FOR_ACTION); afterAction=true
+                    transition(Stage.AWAITING_USER_ACTION); executor.requestUserAction(current.key)
+                    watchUserAction(generation)
+                } else if(!refreshed) {
+                    refreshed=true; refresh()
+                } else {
+                    failures=0
+                    settle(Results.decide(observation,afterAction),observation.name,true)
+                }
             }
         }
     }
     private fun watchUserAction(token: Int) {
-        handler.postDelayed({
+        post(2000) {
             if(token==generation && running && stage==Stage.AWAITING_USER_ACTION && guard()) {
-                browser()?.inspect(work?.key ?: return@postDelayed) { observation ->
-                    if(token!=generation || !running) return@inspect
-                    if(observation in setOf(Observation.LOGIN,Observation.RESTRICTED)) {
-                        settle(Results.decide(observation,afterAction),observation.name,false)
-                        message(if(observation==Observation.LOGIN) "LOGIN_REQUIRED" else "ACTION_RESTRICTED")
-                    } else watchUserAction(token)
+                browser()?.inspect(work?.key ?: return@post) { observation ->
+                    withStorageGuard {
+                        if(token!=generation || !running || !allowed()) return@withStorageGuard
+                        if(observation in setOf(Observation.LOGIN,Observation.RESTRICTED)) {
+                            settle(Results.decide(observation,afterAction),observation.name,false)
+                            message(if(observation==Observation.LOGIN) "LOGIN_REQUIRED" else "ACTION_RESTRICTED")
+                        } else watchUserAction(token)
+                    }
                 }
             }
-        },2000)
+        }
     }
     fun verify() {
         if(!running || stage!=Stage.AWAITING_USER_ACTION || !guard()) return
         refreshed=true; generation++
         // Allow the genuine user interaction to settle, then perform a fresh navigation.
         transition(Stage.REFRESHING_PROFILE)
-        handler.postDelayed({ if(running && guard()) refresh() },1500)
+        post(1500) { if(running && guard()) refresh() }
     }
     private fun refresh() {
         if(!guard()) return
@@ -142,10 +153,15 @@ class AssistedWorkflow(
         } catch (_: Exception) { storageFailure() }
     }
     fun fail(reason: String) {
-        if(!running || work==null) return
+        if(!running) return
+        if(work==null) {
+            if(reason in stopReasons) pause()
+            message(reason)
+            return
+        }
         failures++
         val ceiling=schedule()?.failureLimit ?: 0
-        settle(Verdict(Status.UNCERTAIN,reason),reason,reason !in setOf("ACTION_RESTRICTED","LOGIN_REQUIRED","RENDERER_GONE","NAVIGATION_BLOCKED") && (ceiling==0 || failures<ceiling))
+        settle(Verdict(Status.UNCERTAIN,reason),reason,reason !in stopReasons && (ceiling==0 || failures<ceiling))
         message(reason)
     }
     fun navigation(url: String) {

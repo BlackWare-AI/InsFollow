@@ -65,3 +65,9 @@ No production signing credentials are configured in this environment. Listing re
 System Back now uses the native OnBackInvokedDispatcher API on the supported Android versions. It collapses an expanded browser without replacing the WebView; otherwise it finishes the single Activity. A native instrumentation test invokes the system global Back action and checks instance preservation. Runtime results for this follow-up are tracked separately from the initial evidence above.
 
 The repository owner reported updating About directly. Other administration settings remain unverified. A development-key signed APK was subsequently published as the separate `debug-0.1-1` prerelease for manual device testing; production v0.1 remains unpublished. The published debug prerelease predates this System Back change.
+
+## Workflow interruption follow-up
+
+The lifecycle follow-up adds a ProfileBrowser interface for deterministic navigation/observation fixtures. No fixture invokes Instagram or presses a real Follow control. New scenarios cover refresh-required A/R/F outcomes, user-assisted S/R/F outcomes, unknown pages, foreground pause/manual resume, late callbacks, skip, network/renderer failures, restrictions while waiting for user action, and login/restrictions between queued accounts.
+
+Scheduled callbacks and asynchronous inspection results now guard SQLite failures and stop in-memory processing while retaining the open durable operation for recovery. A security restriction observed between accounts pauses immediately without consuming a queue entry. New instrumentation injects operation-update failures to validate both scheduling and asynchronous result paths. A separate local WebView fixture terminates its renderer and checks safe destruction and one explicit replacement. Results are pending the follow-up CI run; the initial evidence above applies to its recorded source commit.

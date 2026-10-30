@@ -26,7 +26,7 @@ import java.util.concurrent.Executors
 
 class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
     private val backCallback = android.window.OnBackInvokedCallback {
-        if(expanded) setExpanded(false) else finish()
+        safely { if(expanded) setExpanded(false) else finish() }
     }
     private lateinit var store: Store
     private lateinit var workflow: AssistedWorkflow

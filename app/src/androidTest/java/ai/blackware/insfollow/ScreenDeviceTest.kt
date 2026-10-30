@@ -105,4 +105,36 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
         }
     }
 
+    fun testRendererTerminationAllowsOneExplicitReplacement() {
+        val target=activity
+        lateinit var original: WebView
+        instrumentation.runOnMainSync {
+            original=descendants(target.window.decorView).filterIsInstance<WebView>().single()
+            descendants(target.window.decorView).filterIsInstance<Button>().first { it.text==target.getString(R.string.expand) }.performClick()
+            original.loadDataWithBaseURL("https://www.instagram.com/fiction.one/","<main>Local renderer fixture</main>","text/html","UTF-8",null)
+        }
+        val deadline=android.os.SystemClock.uptimeMillis()+15000
+        var terminated=false
+        while(!terminated && android.os.SystemClock.uptimeMillis()<deadline) {
+            instrumentation.runOnMainSync { terminated=original.webViewRenderProcess?.terminate()==true }
+            if(!terminated) android.os.SystemClock.sleep(50)
+        }
+        assertTrue("Renderer did not start or terminate",terminated)
+        val handledDeadline=android.os.SystemClock.uptimeMillis()+15000
+        var handled=false
+        while(!handled && android.os.SystemClock.uptimeMillis()<handledDeadline) {
+            instrumentation.runOnMainSync { handled=target.findViewById<android.widget.TextView>(R.id.error).text==target.getString(R.string.renderer_gone) }
+            if(!handled) android.os.SystemClock.sleep(50)
+        }
+        assertTrue("Renderer termination was not handled",handled)
+        instrumentation.runOnMainSync {
+            assertFalse(target.isFinishing)
+            assertTrue(descendants(target.window.decorView).filterIsInstance<WebView>().isEmpty())
+            descendants(target.window.decorView).filterIsInstance<Button>().first { it.text==target.getString(R.string.collapse) }.performClick()
+            descendants(target.window.decorView).filterIsInstance<Button>().first { it.text==target.getString(R.string.expand) }.performClick()
+            val replacement=descendants(target.window.decorView).filterIsInstance<WebView>().single()
+            assertNotSame(original,replacement)
+        }
+    }
+
 }
