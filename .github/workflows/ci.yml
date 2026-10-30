@@ -22,7 +22,7 @@ jobs:
           cmdline-tools-version: 13114758
           packages: platform-tools platforms;android-36 build-tools;36.0.0
           log-accepted-android-sdk-licenses: false
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
       - name: Compile, test and lint
         run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleRelease assembleDebugAndroidTest
       - name: Verify outputs and metadata

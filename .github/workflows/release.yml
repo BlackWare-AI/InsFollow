@@ -29,7 +29,7 @@ jobs:
           cmdline-tools-version: 13114758
           packages: platform-tools platforms;android-36 build-tools;36.0.0
           log-accepted-android-sdk-licenses: false
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
       - run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleRelease
       - name: Align, sign, verify and record size/hash
         env:
