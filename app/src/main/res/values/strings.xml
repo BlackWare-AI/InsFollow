@@ -153,4 +153,5 @@
     <string name="scan_filter_current">Scan filter: %1$s</string>
     <string name="filtered">Filtered</string>
     <string name="review">Review required</string>
+    <string name="awaiting_rescan">Awaiting scan / rescan (old observation retained)</string>
 </resources>

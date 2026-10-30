@@ -153,4 +153,5 @@
     <string name="scan_filter_current">Tarama filtresi: %1$s</string>
     <string name="filtered">Filtrelenen</string>
     <string name="review">İnceleme bekleyen</string>
+    <string name="awaiting_rescan">Tarama / yeniden tarama bekliyor (eski gözlem korunur)</string>
 </resources>

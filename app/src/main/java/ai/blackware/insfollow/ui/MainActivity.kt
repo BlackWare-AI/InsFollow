@@ -290,7 +290,8 @@ class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
         val done=q.getOrDefault("DONE",0); val skipped=q.getOrDefault("SKIPPED",0); val remaining=q.getOrDefault("QUEUED",0)+q.getOrDefault("INFLIGHT",0); val total=q.values.sum()
         queueInfo.text=getString(R.string.queue_statistics,total,if(remaining==0) total else done+skipped+1,remaining,done,skipped)
         if(::scanStats.isInitialized) {
-            val scans=store.scanResults().filter { it.key in selectedKeys }
+            val pending=store.scanPendingKeys()
+            val scans=store.scanResults().filter { it.key in selectedKeys && it.key !in pending }
             scanStats.text=getString(R.string.scan_statistics,unique,scans.size,scans.count { it.eligibility==Eligibility.ELIGIBLE },scans.count { it.state==ScanState.PRIVATE_ACCOUNT },scans.count { it.state==ScanState.BELOW_THRESHOLD },scans.count { it.eligibility==Eligibility.REVIEW },(unique-scans.size).coerceAtLeast(0))
             if(scanner.running) status.text=getString(R.string.scan_current,scanner.current.orEmpty()) else status.text=stageText(workflow.stage)
         }
@@ -312,12 +313,13 @@ class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
         content.findViewWithTag<Button>("scan-filter")?.text=getString(R.string.scan_filter_current,getString(when(scanFilter) { Eligibility.ELIGIBLE -> R.string.scan_eligible; Eligibility.FILTERED -> R.string.filtered; Eligibility.REVIEW -> R.string.review; null -> R.string.all }))
         val query=search.text.toString().trim()
         val scans=store.scanResults().associateBy { it.key }
-        val rows=results.filter { (filter==null || it.status==filter) && (scanFilter==null || scans[it.key]?.eligibility==scanFilter) && (it.username.contains(query,true) || it.name.contains(query,true)) }.take(page)
+        val pending=store.scanPendingKeys()
+        val rows=results.filter { (filter==null || it.status==filter) && (scanFilter==null || it.key !in pending && scans[it.key]?.eligibility==scanFilter) && (it.username.contains(query,true) || it.name.contains(query,true)) }.take(page)
         resultList.removeAllViews()
         if(rows.isEmpty()) text(resultList,getString(R.string.empty_results))
         rows.forEach { account ->
             val scan=scans[account.key]
-            text(resultList,getString(R.string.scan_record,if(scanner.running && scanner.current==account.key) scanStateText(ScanState.SCANNING) else scan?.let { scanStateText(it.state) } ?: scanStateText(ScanState.NOT_SCANNED),scan?.facts?.count?.raw ?: getString(R.string.count_unknown),scan?.checkedAt?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toString() }.orEmpty()))
+            text(resultList,getString(R.string.scan_record,if(scanner.running && scanner.current==account.key) scanStateText(ScanState.SCANNING) else if(account.key in pending) getString(R.string.awaiting_rescan) else scan?.let { scanStateText(it.state) } ?: scanStateText(ScanState.NOT_SCANNED),scan?.facts?.count?.raw ?: getString(R.string.count_unknown),scan?.checkedAt?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toString() }.orEmpty()))
             resultList.addView(CheckBox(this).apply { text=getString(R.string.select_rescan,account.username); isChecked=account.key in rescanSelected; setOnCheckedChangeListener { _,checked -> if(checked) rescanSelected.add(account.key) else rescanSelected.remove(account.key) } })
             text(resultList,getString(R.string.record,account.username,account.name,"${account.status.code} · ${statusText(account.status)}",if(account.reason.isEmpty()) getString(R.string.no_reason) else getString(R.string.reason,account.reason)))
             button(resultList,R.string.results) { workflow.pause(); scanner.pause(); store.recheck(account.key); refresh() }.apply { text=getString(R.string.recheck,account.username); isEnabled=workflow.work==null }

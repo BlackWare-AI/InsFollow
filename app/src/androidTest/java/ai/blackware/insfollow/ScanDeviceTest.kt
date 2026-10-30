@@ -44,6 +44,16 @@ class ScanDeviceTest : InstrumentationTestCase() {
         store.finish(work,Verdict(Status.SUCCESS,"FOLLOWING_VERIFIED"),"FOLLOWING"); assertNull(store.acquire(id,true))
         assertEquals(Status.UNPROCESSED,store.accounts().first { it.key=="fiction.two" }.status)
     }
+    fun testPartialRescanExcludesStaleEligibilityButKeepsHistory() {
+        store.saveScan("fiction.one",good); store.saveScan("fiction.two",good)
+        val run=store.createScan(ScanPolicy.ALL)
+        assertEquals(2,store.scanPendingKeys().size)
+        val fresh=store.scanNext(run)!!; store.finishScan(run,fresh,good,0)
+        assertEquals(1,store.scanPendingKeys().size); assertEquals(3,count("scan_history"))
+        val session=store.filteredQueue(); val work=store.acquire(session,true)!!
+        assertEquals(fresh,work.key); store.finish(work,Verdict(Status.ALREADY,"FOLLOWING_VERIFIED"),"FOLLOWING")
+        assertNull(store.acquire(session,true)); assertEquals(2,store.scanResults().size)
+    }
     fun testScanExportsAndBackupRoundtrip() {
         store.saveScan("fiction.one",good); store.saveScan("fiction.two",ProfileFacts(reason="SCAN_TIMEOUT"))
         assertEquals(2,JSONObject(store.exportScans("all")).getJSONArray("accounts").length())

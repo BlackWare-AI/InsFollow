@@ -65,12 +65,13 @@ fun Store.finishScan(id: Long,key: String,facts: ProfileFacts,nextAt: Long) = tr
     db.update("scan_runs",rowValues("nextAt" to nextAt),"id=?",arrayOf(id.toString()))
 }
 fun Store.scanNextAt(id: Long)=readableDatabase.rawQuery("SELECT nextAt FROM scan_runs WHERE id=?",arrayOf(id.toString())).use { if(it.moveToFirst()) it.getLong(0) else 0 }
+fun Store.scanPendingKeys(): Set<String> = readableDatabase.rawQuery("SELECT accountKey FROM scan_queue WHERE runId=(SELECT id FROM scan_runs WHERE state!='STOPPED' ORDER BY id DESC LIMIT 1) AND state!='DONE'",null).use { c -> buildSet { while(c.moveToNext()) add(c.getString(0)) } }
 fun Store.filteredQueue(): Long = transaction { db ->
     require(current()==null) { "OPERATION_ACTIVE" }
     recalculateScans()
     val id=session() ?: createQueue()
     settings(mapOf("filtered_$id" to "true"))
-    val selected=selectedKeys().toSet()
+    val selected=selectedKeys().toSet()-scanPendingKeys()
     val completed=accounts().filter { it.status.confirmed }.map { it.key }.toSet()
     db.delete("eligible_queue","sessionId=?",arrayOf(id.toString()))
     scanResults().filter { it.key in selected && it.key !in completed && it.eligibility==Eligibility.ELIGIBLE && it.facts.observation==Observation.FOLLOW }.forEach { db.insertOrThrow("eligible_queue",null,rowValues("sessionId" to id,"accountKey" to it.key)) }
