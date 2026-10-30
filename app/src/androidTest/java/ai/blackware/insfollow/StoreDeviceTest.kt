@@ -25,4 +25,17 @@ class StoreDeviceTest : InstrumentationTestCase() {
     fun testAnnotatedExportProvenancePreventsDoubleSuffix() { val id=store.createQueue(); repeat(2) { store.finish(store.acquire(id)!!,Verdict(Status.SUCCESS,"FOLLOWING_VERIFIED"),"FOLLOWING") }; val exported=store.annotated(false); store.import(FavoritesCodec.parse(exported),"annotated.json"); assertEquals(exported,store.annotated(false)); assertEquals(2,store.folders().size); assertEquals(17,JSONObject(exported).getInt("other")) }
     fun testTimeoutNeverDefiniteFailure() { val id=store.createQueue(); val work=store.acquire(id)!!; store.finish(work,Verdict(Status.UNCERTAIN,"VERIFICATION_TIMEOUT"),"UNKNOWN"); assertEquals(Status.UNCERTAIN,store.accounts().first { it.key==work.key }.status) }
     fun testResultIdempotence() { val id=store.createQueue(); val work=store.acquire(id)!!; repeat(2) { store.finish(work,Verdict(Status.REQUESTED,"FOLLOW_REQUEST_PENDING"),"REQUESTED") }; assertEquals(1,store.countProcessed(id)); assertEquals(1,store.accounts().first { it.key==work.key }.attempts) }
+    fun testLargeSourceCursorAndPreservation() {
+        val padding="x".repeat(3*1024*1024)
+        val raw=JSONObject(fixture).put("large_unrelated_setting",padding).toString()
+        store.import(FavoritesCodec.parse(raw),"large-fiction.json")
+        val annotated=store.annotated(false)
+        assertEquals(padding,JSONObject(annotated).getString("large_unrelated_setting"))
+        val backup=store.backup()
+        store.restore(backup)
+        assertEquals(2,store.accounts().size)
+        assertEquals(4,store.folders().size)
+        assertEquals(annotated,store.annotated(false))
+    }
+
 }

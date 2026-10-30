@@ -61,4 +61,25 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
         }
     }
 
+    fun testActivityRecreationPreservesSettingsAndSingleBrowser() {
+        val target=activity
+        val monitor=instrumentation.addMonitor(MainActivity::class.java.name,null,false)
+        val data=ai.blackware.insfollow.data.Store(instrumentation.targetContext)
+        val old=data.setting("min","60")
+        data.settings(mapOf("min" to "79"))
+        try {
+            instrumentation.runOnMainSync { target.recreate() }
+            val recreated=monitor.waitForActivityWithTimeout(15000) as? MainActivity
+            assertNotNull(recreated)
+            setActivity(recreated)
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val views=descendants(recreated!!.window.decorView)
+                assertEquals(1,views.filterIsInstance<WebView>().size)
+                val minimum=views.filterIsInstance<android.widget.EditText>().single { it.contentDescription==recreated.getString(R.string.min_interval) }
+                assertEquals("79",minimum.text.toString())
+            }
+        } finally { instrumentation.removeMonitor(monitor); data.settings(mapOf("min" to old)); data.close() }
+    }
+
 }

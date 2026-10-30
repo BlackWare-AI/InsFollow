@@ -30,11 +30,11 @@ object FavoritesCodec {
     }
     fun parse(raw: String): Favorites {
         try {
-            bounded(raw)
+            bounded(raw); JsonText.validate(raw)
             val outer = JSONObject(raw)
             if (!outer.has("favorite_page_pref")) throw InputProblem("MISSING_FAVORITES")
             val encoded = outer.get("favorite_page_pref") as? String ?: throw InputProblem("INVALID_FAVORITES_TYPE")
-            bounded(encoded)
+            bounded(encoded); JsonText.validate(encoded)
             val array = JSONArray(encoded)
             if (array.length() > 2000) throw InputProblem("TOO_MANY_FOLDERS")
             var count = 0
@@ -60,22 +60,20 @@ object FavoritesCodec {
     fun digest(raw: String) = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).joinToString("") { "%02x".format(it) }
     // Always start from the immutable imported source; never remove a name's original suffix.
     fun annotate(raw: String, statuses: Map<String, Status>, includeFailures: Boolean): String {
-        parse(raw)
-        val outer = JSONObject(raw)
-        val folders = JSONArray(outer.getString("favorite_page_pref"))
-        for (f in 0 until folders.length()) {
-            val items = folders.getJSONObject(f).getJSONArray("items")
-            for (i in 0 until items.length()) {
-                val item = items.getJSONObject(i)
-                val status = statuses[Identity.normalize(item.getString("pageId"))]
-                val suffix = when {
-                    status == Status.SUCCESS || status == Status.ALREADY -> " S"
-                    status == Status.FAILURE && includeFailures -> " F"
+        val parsed=parse(raw)
+        val nested=JSONObject(raw).getString("favorite_page_pref")
+        val changes=mutableMapOf<List<String>,String>()
+        parsed.folders.forEachIndexed { folderIndex,folder ->
+            folder.items.forEachIndexed { itemIndex,item ->
+                val suffix=when(statuses[item.key]) {
+                    Status.SUCCESS,Status.ALREADY -> " S"
+                    Status.FAILURE -> if(includeFailures) " F" else ""
                     else -> ""
                 }
-                item.put("name", item.getString("name") + suffix)
+                if(suffix.isNotEmpty()) changes[listOf(folderIndex.toString(),"items",itemIndex.toString(),"name")]=item.name+suffix
             }
         }
-        return outer.put("favorite_page_pref", folders.toString()).toString(2)
+        val annotated=JsonText.rewrite(nested,changes)
+        return JsonText.rewrite(raw,mapOf(listOf("favorite_page_pref") to annotated))
     }
 }

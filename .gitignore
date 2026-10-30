@@ -31,3 +31,11 @@ progress.json
 favorites*.json
 backup*.json
 accounts*.txt
+
+*favorites*.json
+*Favorites*.json
+insfollow-*.json
+insfollow-*.txt
+signing.properties
+keystore.properties
+secrets.properties

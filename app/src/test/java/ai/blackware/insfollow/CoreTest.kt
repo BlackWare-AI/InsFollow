@@ -47,4 +47,16 @@ class CoreTest {
     @Test fun loginUnknownAndRestrictionStayUncertain() { for(observation in listOf(Observation.LOGIN,Observation.RESTRICTED,Observation.UNKNOWN)) assertEquals(Status.UNCERTAIN,Results.decide(observation,true).status) }
     @Test fun confirmedResultSurvivesUncertainty() { for(status in Status.entries.filter { it.confirmed }) assertEquals(status,Results.retained(status,Status.UNCERTAIN)) }
     @Test fun verifiedFollowStillAbsentIsFailure() { assertEquals(Status.FAILURE,Results.decide(Observation.FOLLOW,true).status) }
+    @Test fun trailingDataRejected() { rejected(source()+" garbage") }
+    @Test fun duplicateFieldsRejected() { rejected("{\"favorite_page_pref\":\"[]\",\"favorite_page_pref\":\"[]\"}") }
+    @Test fun nonJsonExtensionsRejected() { rejected("{favorite_page_pref:'[]'}"); rejected("{\"favorite_page_pref\":\"[]\",}") }
+    @Test fun unrelatedNumberTokensRemainExact() {
+        val raw="{\"large\":123456789012345678901234567890,\"decimal\":1.23456789012345678901234567890,\"favorite_page_pref\":"+JSONObject.quote("[{\"name\":\"FAV\",\"extra\":123456789012345678901234567890,\"items\":[{\"pageId\":\"fiction.one\",\"name\":\"Example\",\"extra\":123456789012345678901234567890}] }]")+"}"
+        val annotated=FavoritesCodec.annotate(raw,mapOf("fiction.one" to Status.SUCCESS),false)
+        assertTrue(annotated.startsWith("{\"large\":123456789012345678901234567890,\"decimal\":1.23456789012345678901234567890,"))
+        val nested=JSONObject(annotated).getString("favorite_page_pref")
+        assertEquals(2,Regex("123456789012345678901234567890").findAll(nested).count())
+        assertTrue(nested.contains("\"name\":\"Example S\""))
+    }
+
 }

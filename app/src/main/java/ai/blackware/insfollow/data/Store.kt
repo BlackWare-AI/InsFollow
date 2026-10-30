@@ -143,7 +143,7 @@ class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(
         tables.forEach { table -> val rows = JSONArray(); largeQuery(db,"SELECT * FROM $table").use { c -> while(c.moveToNext()) { val row = JSONObject(); for(i in 0 until c.columnCount) row.put(c.getColumnName(i),if(c.isNull(i)) JSONObject.NULL else if(c.getType(i)==android.database.Cursor.FIELD_TYPE_INTEGER) c.getLong(i) else c.getString(i)); rows.put(row) } }; json.put(table,rows) }; json.toString().also { FavoritesCodec.bounded(it,32*1024*1024) }
     }
     fun restore(raw: String) {
-        FavoritesCodec.bounded(raw,32*1024*1024)
+        FavoritesCodec.bounded(raw,32*1024*1024); JsonText.validate(raw)
         val json = JSONObject(raw)
         require(json.getString("format")=="insfollow-local" && json.getInt("schema")==1) { "INVALID_BACKUP" }
         val accounts = json.getJSONArray("accounts")

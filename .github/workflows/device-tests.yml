@@ -34,7 +34,11 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest
+          script: |
+            ./gradlew connectedDebugAndroidTest
+            adb shell am force-stop ai.blackware.insfollow
+            adb shell am start -W -n ai.blackware.insfollow/.ui.MainActivity | tee startup-api-${{ matrix.api }}.txt
+            adb shell dumpsys webviewupdate > webview-api-${{ matrix.api }}.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -42,3 +46,5 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+            startup-api-*.txt
+            webview-api-*.txt

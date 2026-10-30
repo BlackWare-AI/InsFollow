@@ -3,7 +3,7 @@
 One Activity uses native XML/Views, one attached WebView and SQLiteOpenHelper. No production UI/network/database framework is required beyond Kotlin’s runtime and Android.
 
 - `model/`: normalized identities, status/stage enums and conservative verdict mapping.
-- `data/`: bounded nested JSON parsing, immutable source snapshots, transactional SQLite, exports and app backups.
+- `data/`: bounded strict JSON scanning with targeted string edits, nested Favorites parsing, immutable source snapshots, transactional SQLite, exports and app backups.
 - `queue/`: eligibility without replacement and local-time window/interval logic.
 - `web/`: lifecycle and navigation restrictions; bundled read-only `res/raw/inspect.js` detector.
 - `workflow/`: bounded state machine, assisted executor interface and refreshed verification.
