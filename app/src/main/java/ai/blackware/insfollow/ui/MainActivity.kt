@@ -25,6 +25,9 @@ import java.time.format.ResolverStyle
 import java.util.concurrent.Executors
 
 class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
+    private val backCallback = android.window.OnBackInvokedCallback {
+        if(expanded) setExpanded(false) else finish()
+    }
     private lateinit var store: Store
     private lateinit var workflow: AssistedWorkflow
     private var browser: BrowserSession?=null
@@ -94,6 +97,7 @@ class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
         },{ showReason(it) })
         buildSource(); buildConfig(); buildBrowser(); buildControls(); buildResults(); buildExports()
         status.setText(R.string.idle); refresh()
+        onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback)
     }
     private fun buildSource() {
         val body=card(R.string.source,true)
@@ -268,10 +272,9 @@ class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
     override fun requestUserAction(account: String) { setExpanded(true) }
     override fun onResume() { super.onResume(); if(::workflow.isInitialized) workflow.foreground(true); if(expanded) browser?.resume() }
     override fun onPause() { if(::workflow.isInitialized) safely { workflow.foreground(false) }; browser?.pause(); super.onPause() }
-    @Deprecated("Activity back navigation")
-    override fun onBackPressed() { if(expanded) setExpanded(false) else super.onBackPressed() }
     override fun onDestroy() {
         destroyed=true
+        onBackInvokedDispatcher.unregisterOnBackInvokedCallback(backCallback)
         if(::workflow.isInitialized) safely { workflow.close() }
         browser?.destroy(); browser=null
         io.execute { store.close() }; io.shutdown()

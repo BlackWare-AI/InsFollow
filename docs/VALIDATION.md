@@ -58,4 +58,10 @@ Repository existed publicly with README and MIT license, no application or AGENT
 
 The available GitHub integration returned **HTTP 403, Resource not accessible by integration** for About/topics, Discussions, secret scanning/push protection, Dependabot alerts/updates and private vulnerability reporting administration. These settings are **not verified/enabled by this implementation**. `scripts/configure_repository.sh` contains the exact requested changes for an owner credential with administration scope. Dependabot configuration and CI/release workflows are supplied as source.
 
-No production signing credentials are configured in this environment. Listing repository Actions secret names was also denied with HTTP 403, so repository-side signing configuration is unverified. No v0.1 tag or GitHub Release has been published. The release workflow fails unless secure signing secrets and `RELEASE_VALIDATION_APPROVED=true` are present. It never publishes unsigned production artifacts.
+No production signing credentials are configured in this environment. Listing repository Actions secret names was also denied with HTTP 403, so repository-side signing configuration is unverified. No production v0.1 tag or production GitHub Release has been published. The release workflow fails unless secure signing secrets and `RELEASE_VALIDATION_APPROVED=true` are present. It never publishes unsigned production artifacts.
+
+## System Back follow-up
+
+System Back now uses the native OnBackInvokedDispatcher API on the supported Android versions. It collapses an expanded browser without replacing the WebView; otherwise it finishes the single Activity. A native instrumentation test invokes the system global Back action and checks instance preservation. Runtime results for this follow-up are tracked separately from the initial evidence above.
+
+The repository owner reported updating About directly. Other administration settings remain unverified. A development-key signed APK was subsequently published as the separate `debug-0.1-1` prerelease for manual device testing; production v0.1 remains unpublished. The published debug prerelease predates this System Back change.

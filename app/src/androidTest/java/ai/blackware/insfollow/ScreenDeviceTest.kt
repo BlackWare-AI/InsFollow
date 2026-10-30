@@ -82,4 +82,27 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
         } finally { instrumentation.removeMonitor(monitor); data.settings(mapOf("min" to old)); data.close() }
     }
 
+    fun testSystemBackCollapsesWithoutReplacingBrowser() {
+        val target=activity
+        lateinit var original: WebView
+        instrumentation.runOnMainSync {
+            original=descendants(target.window.decorView).filterIsInstance<WebView>().single()
+            descendants(target.window.decorView).filterIsInstance<Button>().first { it.text==target.getString(R.string.expand) }.performClick()
+        }
+        assertTrue(instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+        val deadline=android.os.SystemClock.uptimeMillis()+5000
+        var collapsed=false
+        while(!collapsed && android.os.SystemClock.uptimeMillis()<deadline) {
+            instrumentation.runOnMainSync {
+                collapsed=descendants(target.window.decorView).filterIsInstance<Button>().any { it.text==target.getString(R.string.expand) }
+            }
+            if(!collapsed) android.os.SystemClock.sleep(50)
+        }
+        assertTrue("System Back did not collapse the browser",collapsed)
+        instrumentation.runOnMainSync {
+            assertFalse(target.isFinishing)
+            assertSame(original,descendants(target.window.decorView).filterIsInstance<WebView>().single())
+        }
+    }
+
 }
