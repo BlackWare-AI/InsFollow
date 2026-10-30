@@ -58,4 +58,29 @@ Repository existed publicly with README and MIT license, no application or AGENT
 
 The available GitHub integration returned **HTTP 403, Resource not accessible by integration** for About/topics, Discussions, secret scanning/push protection, Dependabot alerts/updates and private vulnerability reporting administration. These settings are **not verified/enabled by this implementation**. `scripts/configure_repository.sh` contains the exact requested changes for an owner credential with administration scope. Dependabot configuration and CI/release workflows are supplied as source.
 
-No production signing credentials are configured in this environment. Listing repository Actions secret names was also denied with HTTP 403, so repository-side signing configuration is unverified. No v0.1 tag or GitHub Release has been published. The release workflow fails unless secure signing secrets and `RELEASE_VALIDATION_APPROVED=true` are present. It never publishes unsigned production artifacts.
+No production signing credentials are configured in this environment. Listing repository Actions secret names was also denied with HTTP 403, so repository-side signing configuration is unverified. No production v0.1 tag or production GitHub Release has been published. The release workflow fails unless secure signing secrets and `RELEASE_VALIDATION_APPROVED=true` are present. It never publishes unsigned production artifacts.
+
+## System Back follow-up
+
+System Back now uses the native OnBackInvokedDispatcher API on the supported Android versions. It collapses an expanded browser without replacing the WebView; otherwise it finishes the single Activity. A native instrumentation test invokes the system global Back action and checks instance preservation. Runtime results for this follow-up are tracked separately from the initial evidence above.
+
+The repository owner reported updating About directly. Other administration settings remain unverified. A development-key signed APK was subsequently published as the separate `debug-0.1-1` prerelease for manual device testing; production v0.1 remains unpublished. The published debug prerelease predates this System Back change.
+
+## Workflow interruption follow-up
+
+The lifecycle follow-up adds a ProfileBrowser interface for deterministic navigation/observation fixtures. No fixture invokes Instagram or presses a real Follow control. New scenarios cover refresh-required A/R/F outcomes, user-assisted S/R/F outcomes, unknown pages, foreground pause/manual resume, late callbacks, skip, network/renderer failures, restrictions while waiting for user action, and login/restrictions between queued accounts.
+
+Scheduled callbacks and asynchronous inspection results now guard SQLite failures and stop in-memory processing while retaining the open durable operation for recovery. A security restriction observed between accounts pauses immediately without consuming a queue entry. New instrumentation injects operation-update failures to validate both scheduling and asynchronous result paths. A separate local WebView fixture terminates its renderer and checks safe destruction and one explicit replacement. Results are pending the follow-up CI run; the initial evidence above applies to its recorded source commit.
+
+The first follow-up renderer test failed on both API levels: an unqualified destroy() inside the WebView builder resolved to WebView.destroy(), leaving the dead view attached. The callback now explicitly invokes BrowserSession.destroy() to detach and destroy it before notifying the Activity. Test-side UI assertions now propagate to the instrumentation thread so a failed assertion is reported without aborting the remaining suite. A rerun is required; the failing run is not counted as passing lifecycle validation.
+
+Source `8d3d92d`: the Android 16 CI JUnit report contains 38 tests with zero failures/errors/skips, including renderer termination, native Back and all workflow fixtures. The Android 14 CI process was killed with signal 9 during the pre-existing read-only detector fixture, without an application exception stack; that attempt is not passing evidence. The corrected renderer termination test separately passed on the local Android 14 AOSP software emulator (`OK (1 test)`, 59.762 seconds including launch/setup). The full local Android 14 suite was subsequently attempted; its partial result and the final accelerated CI rerun are recorded below. GitHub run-status endpoints were stale relative to downloadable artifacts during this investigation, so counts above come from the JUnit reports, not inferred job colors.
+
+
+## Verified lifecycle follow-up results
+
+[CI run 41103030652](https://github.com/BlackWare-AI/InsFollow/actions/runs/41103030652), source `99141f4` (application code unchanged from `8d3d92d`), produced downloaded JUnit reports confirming **37 JVM tests**, **38 instrumentation tests on Android 14**, and **38 instrumentation tests on Android 16**, all with zero failures, errors or skips. Both device reports include the actual native Back and renderer termination checks. The CI lint report has **zero errors and two warnings**: OldTargetApi and a newer Gradle version. The tested compile/target SDK 36 and Gradle 8.13 remain pinned; this evidence does not establish Android 17/API 37 compatibility.
+
+The initial Android 14 SIGKILL interruption did not reproduce in this complete rerun. The local Android 14 software-emulator renderer-only test passed, but its subsequent full-suite attempt exceeded a 15-second fixture-page wait and was stopped after accelerated CI provided complete coverage. That partial local run is **not** a passing full-suite result. No real Instagram follow action was used by these tests.
+
+Local follow-up APKs: debug 2,890,263 bytes, SHA-256 `c031058cfe45264203c07dbf1ee0e7dc109bdaa3a4bad7c449d968ffdce53d89`; minified unsigned release 154,891 bytes, SHA-256 `392dbef88838898cb8c3141a6341092f81b417299c69a84acc9dc3d3ed46c8cc`. These are validation builds and have not replaced the published debug-0.1-1 asset. Physical-device, live Instagram, target InstaPro and remaining manual lifecycle/low-memory gates remain open.
