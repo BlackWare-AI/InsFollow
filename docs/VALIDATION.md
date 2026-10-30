@@ -17,15 +17,22 @@ These are local validation artifacts, not a production release. CI rebuilds have
 
 Static checks passed: one manifest Activity; only INTERNET permission; matching 96 English/Turkish string keys without duplicate names; debug APK signature valid; APK application ID `ai.blackware.insfollow`, versionName `0.1`, versionCode `1`, minSdk 34, targetSdk 36. `git diff --check` passed.
 
-JVM tests cover valid/malformed/missing/wrong-type nested Favorites JSON, Unicode, original identities, empty folders/usernames, duplicate membership, repeated parsing, 10,000-item input, size/depth limits, preserved unrelated properties, export/reimport, annotations, original status-like suffixes, unique shuffled eligibility, empty queues, normal/overnight scheduling, interval validation, and conservative result mapping/retention.
+JVM tests cover valid/malformed/missing/wrong-type nested Favorites JSON, Unicode, original identities, empty folders/usernames, duplicate membership, repeated parsing, 10,000-item input, size/depth limits, preserved unrelated properties, export/reimport, annotations, original status-like suffixes, unique shuffled eligibility, empty queues, normal/overnight scheduling, interval validation, and conservative result mapping/retention. Strict-scan tests reject trailing garbage, duplicate fields and non-JSON syntax, and verify exact preservation of unrelated high-precision numeric literals.
 
 ## Runtime evidence
 
-[GitHub CI run 40994031672](https://github.com/BlackWare-AI/InsFollow/actions/runs/40994031672), commit `5df852e`, passed compilation, tests, lint and APK verification, plus **16 instrumentation tests on each of Android 14/API 34 and Android 16/API 36**. No tests failed. The strict-export changes, larger source fixture, Activity recreation test and startup measurement are undergoing a final CI rerun.
+[GitHub CI run 40995393558](https://github.com/BlackWare-AI/InsFollow/actions/runs/40995393558), source commit `a08d3bf`, passed compilation, **37 JVM tests**, lint and APK verification, plus **19 instrumentation tests on each of Android 14/API 34 and Android 16/API 36**. Downloaded JUnit XML confirms zero failures, errors or skips on both emulators. Explicit debug APK reinstalls and launches also succeeded after test cleanup.
+
+| Emulator | Bundled System WebView | Process-cold launch TotalTime |
+| --- | --- | ---: |
+| Android 14/API 34, Google APIs x86_64 | 113.0.5672.136 | 1,164 ms |
+| Android 16/API 36, Google APIs x86_64 | 133.0.6943.137 | 1,203 ms |
+
+Measurements use one `adb shell am start -W` launch after a fresh reinstall and force-stop on shared GitHub Ubuntu runners with KVM and two emulator cores. They are development-APK samples, not physical-device, warm-start or representative production benchmarks. Reports, startup output and WebView package information are attached to that CI run. The emulator images bundle older WebView versions; current physical-device WebView behavior remains unverified.
 
 The local software emulator lacks KVM; its first process was killed with exit 137 and its second boot did not reach package-manager readiness before the equivalent accelerated GitHub runs completed, so it was stopped. Local installation was therefore not verified; the passing accelerated GitHub emulator runs provide installation/launch evidence. No physical-device or live Instagram testing has been performed. No real follow operation has been used as an automated test.
 
-Native instrumentation covers transactional import, source idempotence, queue persistence/order/restart, interrupted operations, reimport preservation, exclusion of completed accounts, pause/stop, write-failure rollback via a rejecting SQLite trigger, backup/restore rollback, export provenance, timeout uncertainty and idempotent completion. UI tests cover same-instance browser expansion/collapse, inline cards, Turkish resources and local deterministic detector fixtures. The final run and startup measurements will be recorded once available. Emulator fixture checks do not establish live website compatibility.
+Native instrumentation covers transactional import, source idempotence, queue persistence/order/restart, interrupted operations, reimport preservation, exclusion of completed accounts, pause/stop, write-failure rollback via a rejecting SQLite trigger, backup/restore rollback, export provenance, timeout uncertainty and idempotent completion. A 3 MiB unrelated-source fixture verifies the larger SQLite cursor window, export preservation and restore. A simulated missing browser callback verifies the independent workflow deadline. UI tests cover same-instance browser expansion/collapse, inline cards, Turkish resources, local deterministic detector fixtures and Activity recreation with persisted settings and exactly one new browser. Emulator fixture checks do not establish live website compatibility.
 
 ## Required manual acceptance matrix
 
@@ -42,7 +49,8 @@ All unchecked items below remain release gates. Use fictional local fixtures and
 - [ ] Roundtrip every JSON/TXT export and app backup/restore, including corrupt/untrusted backups and storage failures. Ensure authentication secrets never enter exports.
 - [ ] Import an annotated copy into a specified target InstaPro version and record its version/result. JSON parsing alone is insufficient proof.
 - [ ] Performance at defensive limits and on a low-memory device; verify bounded input and source cursor behavior without ANRs or OOM. A 3 MiB unrelated-source fixture also runs in instrumentation.
-- [ ] Passing GitHub CI on reviewed source, repository settings verified, production signing configured, APK install/signature/identity/size/hash checked.
+- [x] Passing GitHub CI on the reviewed application source, emulator debug APK install/launch, and local debug signature/identity/size/hash checks.
+- [ ] Repository administration settings verified, production signing configured, signed release APK installed and validated.
 
 ## Repository settings and release blockers
 
