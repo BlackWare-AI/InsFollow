@@ -32,7 +32,7 @@ class AssistedWorkflow(
     private var generation=0
     private var deadline=0L
     private var failures=0
-    private val stopReasons=setOf("ACTION_RESTRICTED","LOGIN_REQUIRED","RENDERER_GONE","NAVIGATION_BLOCKED")
+    private val stopReasons=setOf("ACTION_RESTRICTED","LOGIN_REQUIRED","RENDERER_GONE","NAVIGATION_BLOCKED","VERIFICATION_TIMEOUT")
     private fun withStorageGuard(action: () -> Unit) {
         try { action() } catch (_: android.database.SQLException) { storageFailure() }
     }

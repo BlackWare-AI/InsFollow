@@ -70,6 +70,7 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
             Triple("<button>Follow</button></header><article><a href='/p/fixture/'>Post</a></article>","PUBLIC","3,000"),
             Triple("<button>Takip Et</button></header><article><a href='/p/fixture/'>Post</a></article>","PUBLIC","3,5 B"),
             Triple("<button>Follow</button></header><p>This account is private</p>","PRIVATE","4K"),
+            Triple("<button>Follow</button></header><p>This account is private</p><article><a href='/p/fixture/'>Post</a></article>","UNKNOWN","4K"),
             Triple("<button>Following</button></header><article><a href='/p/fixture/'>Post</a></article>","UNKNOWN","4K")
         )
         cases.forEach { (markup,privacy,count) ->

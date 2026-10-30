@@ -20,7 +20,7 @@
     // Seeing posts while following does not establish that an account is public.
     const follow = Array.from(header.querySelectorAll('button,[role="button"]')).filter(visible).some(x => ['follow','follow back','takip et','sen de takip et'].includes(x.innerText.trim().toLocaleLowerCase('tr-TR')));
     const publicEvidence = follow && Array.from(main.querySelectorAll('article a[href*="/p/"],a[href*="/reel/"]')).some(visible);
-    const privacy = privateEvidence ? 'PRIVATE' : publicEvidence ? 'PUBLIC' : 'UNKNOWN';
+    const privacy = privateEvidence && publicEvidence ? 'UNKNOWN' : privateEvidence ? 'PRIVATE' : publicEvidence ? 'PUBLIC' : 'UNKNOWN';
     const candidates = [];
     Array.from(header.querySelectorAll('a,li')).filter(visible).forEach(node => {
         const label = node.innerText.trim();

@@ -26,6 +26,7 @@ data class AccountFilter(val minimum: Long = 3000, val publicOnly: Boolean = tru
 /** Rounded labels represent an interval, never an invented exact count. */
 object FollowerNumbers {
     fun parse(raw: String): FollowerCount? = runCatching {
+        require(raw.length<=64)
         val value=raw.trim().replace("\u00a0"," ").uppercase(Locale.ROOT)
         val compact=Regex("^([0-9]+(?:[.,][0-9]+)?)\\s*([KMB])$").matchEntire(value)
         if(compact!=null) {

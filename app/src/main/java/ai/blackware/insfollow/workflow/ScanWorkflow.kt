@@ -37,7 +37,11 @@ class ScanWorkflow(private val store: Store,private val browser: () -> ProfileBr
         val key=current ?: run { running=false; changed(); completed(); return }
         token++; val generation=token
         browser()?.profile(key); changed()
-        post(timeout) { if(running && token==generation) { if(allowed()) finish(ProfileFacts(reason="SCAN_TIMEOUT")) else pause() } }
+        post(timeout) {
+            if(running && token==generation) {
+                if(allowed()) { finish(ProfileFacts(reason="SCAN_TIMEOUT"),false); message("VERIFICATION_TIMEOUT") } else pause()
+            }
+        }
         post(1200) { poll(generation,null) }
     }
     private fun poll(generation: Int,previous: ProfileFacts?) {
@@ -58,10 +62,10 @@ class ScanWorkflow(private val store: Store,private val browser: () -> ProfileBr
             } else post(1000) { poll(generation,facts) }
         } }
     }
-    private fun finish(facts: ProfileFacts) {
+    private fun finish(facts: ProfileFacts,advance: Boolean = true) {
         val key=current ?: return; val id=run ?: return
         store.finishScan(id,key,facts,System.currentTimeMillis()+interval())
-        token++; handler.removeCallbacksAndMessages(null); current=null; changed(); tick(); next()
+        token++; handler.removeCallbacksAndMessages(null); current=null; if(!advance) running=false; changed(); tick(); next()
     }
     fun fail(reason: String) = guarded {
         if(!running) return@guarded
