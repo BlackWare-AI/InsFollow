@@ -70,7 +70,7 @@ class ScanWorkflow(private val store: Store,private val browser: () -> ProfileBr
     fun fail(reason: String) = guarded {
         if(!running) return@guarded
         if(reason in setOf("LOGIN_REQUIRED","ACTION_RESTRICTED","RENDERER_GONE","NAVIGATION_BLOCKED")) { pause(); message(reason) }
-        else finish(ProfileFacts(reason=reason))
+        else { finish(ProfileFacts(reason=reason),false); message(reason) }
     }
     fun pause() { running=false; token++; handler.removeCallbacksAndMessages(null); runCatching { changed() } }
     fun stop() { pause() }

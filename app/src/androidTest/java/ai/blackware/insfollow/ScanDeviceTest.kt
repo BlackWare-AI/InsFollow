@@ -92,6 +92,17 @@ class ScanDeviceTest : InstrumentationTestCase() {
         assertEquals(2,browser.visits.distinct().size); assertEquals(2,browser.visits.size); assertEquals(2,store.scanResults().size); assertEquals(0,count("operations"))
         assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
     }
+    fun testMissingCallbackDeadlinePausesInsteadOfDrainingScan() {
+        val browser=object: ProfileBrowser {
+            override fun profile(key: String) {}
+            override fun facts(key: String,result: (ProfileFacts)->Unit) {}
+            override fun inspect(key: String,result: (Observation)->Unit) {}
+        }
+        instrumentation.runOnMainSync { engine=ScanWorkflow(store,{browser},{true},{0},{},{},{},150).also { it.start(ScanPolicy.ALL) } }
+        waitUntil { engine?.running==false }
+        assertEquals(1,store.scanResults().size); assertEquals(ScanState.SCAN_ERROR,store.scanResults().single().state)
+        assertEquals(0,count("operations")); assertNotNull(store.scanRun())
+    }
     fun testSecurityWarningPausesWithoutConsumingScan() {
         val browser=Browser(ProfileFacts(reason="ACTION_RESTRICTED")); val messages=mutableListOf<String>()
         instrumentation.runOnMainSync { engine=ScanWorkflow(store,{browser},{true},{0},{},{messages.add(it)},{},5000).also { it.start(ScanPolicy.ALL) } }
