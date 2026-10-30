@@ -3,6 +3,8 @@ package ai.blackware.insfollow
 import android.test.InstrumentationTestCase
 import ai.blackware.insfollow.data.FavoritesCodec
 import ai.blackware.insfollow.data.Store
+import ai.blackware.insfollow.data.scanResults
+import ai.blackware.insfollow.data.dailyReport
 import ai.blackware.insfollow.model.*
 import ai.blackware.insfollow.queue.Schedule
 import ai.blackware.insfollow.web.ProfileBrowser
@@ -20,6 +22,8 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
     private var actions = 0
 
     private class FixtureBrowser(var observation: Observation) : ProfileBrowser {
+        var factsValue=ProfileFacts(Privacy.PUBLIC,FollowerNumbers.parse("4000"),observation=Observation.FOLLOW)
+        override fun facts(key: String,result: (ProfileFacts)->Unit) { result(factsValue) }
         var navigations = 0
         var inspections = 0
         var defer = false
@@ -47,17 +51,60 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         super.tearDown()
     }
 
-    private fun start(browser: FixtureBrowser, timeout: Long = 10_000, afterStart: () -> Unit = {}) {
+    private fun start(browser: FixtureBrowser, timeout: Long = 10_000, filters: Boolean = false, config: Schedule = Schedule(1,1,LocalTime.MIN,LocalTime.MIN,1,3), afterStart: () -> Unit = {}) {
         instrumentation.runOnMainSync {
             workflow = AssistedWorkflow(
-                store, { browser }, { Schedule(1, 1, LocalTime.MIN, LocalTime.MIN, 1, 3) },
+                store, { browser }, { config },
                 object : FollowExecutor { override fun requestUserAction(account: String) { actions++ } },
-                { _, _ -> }, { messages.add(it) }, timeout
+                { _, _ -> }, { messages.add(it) }, timeout,filters
             ).also { it.expanded = true; it.foreground(true); it.start() }
             afterStart()
         }
     }
 
+    fun testDirectFilteringNeverRequestsUserFollowForPrivateAccounts() {
+        val browser=FixtureBrowser(Observation.FOLLOW).apply { factsValue=ProfileFacts(Privacy.PRIVATE,FollowerNumbers.parse("5000")) }
+        start(browser,filters=true)
+        awaitCondition { workflow?.running==false }
+        assertEquals(0,actions); assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
+        assertEquals(1,store.scanResults().size)
+        val report=org.json.JSONObject(store.dailyReport()); assertEquals(1,report.getInt("visited")); assertEquals(1,report.getInt("observations"))
+    }
+    fun testDirectRoundedBoundaryRequiresReview() {
+        val browser=FixtureBrowser(Observation.FOLLOW).apply { factsValue=ProfileFacts(Privacy.PUBLIC,FollowerNumbers.parse("3K")) }
+        start(browser,filters=true); awaitCondition { workflow?.running==false }
+        assertEquals(0,actions); assertTrue(store.scanResults().all { it.eligibility==Eligibility.REVIEW })
+    }
+    fun testDirectEligibleProfileRequestsAssistedAction() {
+        start(FixtureBrowser(Observation.FOLLOW),filters=true)
+        awaitCondition { actions==1 }; assertEquals(Stage.AWAITING_USER_ACTION,workflow!!.stage)
+        assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
+    }
+    fun testDailyTargetBlocksNewNavigation() {
+        val id=store.createQueue(); store.finish(store.acquire(id)!!,Verdict(Status.ALREADY,"FOLLOWING_VERIFIED"),"FOLLOWING")
+        val browser=FixtureBrowser(Observation.FOLLOW)
+        start(browser,config=Schedule(1,1,LocalTime.MIN,LocalTime.MIN,0,3,dailyLimit=1))
+        assertFalse(workflow!!.running); assertEquals(0,browser.navigations); assertTrue("DAILY_LIMIT" in messages)
+    }
+    fun testSessionBreakSurvivesEngineRecreation() {
+        val id=store.createQueue(); store.finish(store.acquire(id)!!,Verdict(Status.ALREADY,"FOLLOWING_VERIFIED"),"FOLLOWING")
+        val browser=FixtureBrowser(Observation.FOLLOW)
+        val config=Schedule(1,1,LocalTime.MIN,LocalTime.MIN,1,3,breakMinutes=60)
+        start(browser,config=config); assertTrue("SESSION_LIMIT" in messages); assertFalse(workflow!!.running)
+        start(browser,config=config); assertTrue("SESSION_BREAK" in messages); assertEquals(0,browser.navigations)
+    }
+    fun testQueueCompletionAppliesSessionBreakWithoutAnExtraInterval() {
+        val browser=FixtureBrowser(Observation.FOLLOWING)
+        start(browser,config=Schedule(3600,3600,LocalTime.MIN,LocalTime.MIN,0,3,breakMinutes=60),afterStart={
+            // Keep one queued account so exhaustion is reached by this verified operation.
+            val current=store.current()!!
+            store.writableDatabase.delete("queue","sessionId=? AND accountKey!=?",arrayOf(current.session.toString(),current.key))
+        })
+        awaitCondition { workflow?.running==false }
+        assertEquals(Stage.COMPLETED,workflow!!.stage)
+        assertTrue(store.setting("break_until","0").toLong()>System.currentTimeMillis())
+        assertEquals(1,store.accounts().count { it.status==Status.ALREADY })
+    }
     private fun awaitCondition(condition: () -> Boolean) {
         val deadline = android.os.SystemClock.uptimeMillis() + 15_000
         var satisfied = false

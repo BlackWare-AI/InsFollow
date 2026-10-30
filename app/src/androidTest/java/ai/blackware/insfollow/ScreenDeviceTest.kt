@@ -28,6 +28,68 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
             assertSame(first,descendants(root).filterIsInstance<WebView>().single())
         }
     }
+    fun testHomeBrowserTabsKeepSameViewAndNavigation() {
+        val target=activity
+        onUi {
+            val root=target.window.decorView
+            val original=descendants(root).filterIsInstance<WebView>().single()
+            val url=original.url
+            repeat(3) {
+                descendants(root).filterIsInstance<Button>().first { it.text==target.getString(R.string.browser_tab) }.performClick()
+                assertSame(original,descendants(root).filterIsInstance<WebView>().single()); assertEquals(url,original.url)
+                descendants(root).filterIsInstance<Button>().first { it.text==target.getString(R.string.home_tab) }.performClick()
+                assertSame(original,descendants(root).filterIsInstance<WebView>().single()); assertEquals(url,original.url)
+            }
+        }
+    }
+    fun testTabsDoNotPauseRunningScan() {
+        val target=activity
+        val data=ai.blackware.insfollow.data.Store(instrumentation.targetContext,"tab-fixture.db")
+        val fixture=org.json.JSONObject().put("favorite_page_pref",org.json.JSONArray().put(org.json.JSONObject().put("name","Test").put("items",org.json.JSONArray().put(org.json.JSONObject().put("pageId","fiction.one").put("name","Test")))).toString()).toString()
+        data.import(ai.blackware.insfollow.data.FavoritesCodec.parse(fixture),"fixture.json"); data.selectAll(true)
+        val field=MainActivity::class.java.getDeclaredField("scanner").apply { isAccessible=true }
+        val original=field.get(target)
+        val fake=object: ai.blackware.insfollow.web.ProfileBrowser {
+            override fun profile(key: String) {}
+            override fun inspect(key: String,result: (ai.blackware.insfollow.model.Observation)->Unit) {}
+        }
+        val scan=ai.blackware.insfollow.workflow.ScanWorkflow(data,{fake},{true},{0},{},{},{})
+        try {
+            onUi {
+                field.set(target,scan); scan.start(ai.blackware.insfollow.model.ScanPolicy.ALL)
+                val views=descendants(target.window.decorView)
+                views.filterIsInstance<Button>().first { it.text==target.getString(R.string.browser_tab) }.performClick(); assertTrue(scan.running)
+                views.filterIsInstance<Button>().first { it.text==target.getString(R.string.home_tab) }.performClick(); assertTrue(scan.running)
+            }
+        } finally { onUi { scan.pause(); field.set(target,original) }; data.close(); instrumentation.targetContext.deleteDatabase("tab-fixture.db") }
+    }
+    fun testPrivacyAndFollowerFactsOnReadOnlyFixtures() {
+        val target=activity
+        onUi { descendants(target.window.decorView).filterIsInstance<Button>().first { it.text==target.getString(R.string.browser_tab) }.performClick() }
+        val cases=listOf(
+            Triple("<button>Follow</button></header><article><a href='/p/fixture/'>Post</a></article>","PUBLIC","3,000"),
+            Triple("<button>Takip Et</button></header><article><a href='/p/fixture/'>Post</a></article>","PUBLIC","3,5 B"),
+            Triple("<button>Follow</button></header><p>This account is private</p>","PRIVATE","4K"),
+            Triple("<button>Follow</button></header><p>This account is private</p><article><a href='/p/fixture/'>Post</a></article>","UNKNOWN","4K"),
+            Triple("<button>Following</button></header><article><a href='/p/fixture/'>Post</a></article>","UNKNOWN","4K")
+        )
+        cases.forEach { (markup,privacy,count) ->
+            val loaded=java.util.concurrent.CountDownLatch(1)
+            lateinit var web: WebView
+            onUi {
+                web=descendants(target.window.decorView).filterIsInstance<WebView>().single()
+                web.webViewClient=object: android.webkit.WebViewClient() { override fun onPageFinished(view: WebView,url: String) { loaded.countDown() } }
+                web.loadDataWithBaseURL("https://www.instagram.com/fiction.one/","<main><header><h2>fiction.one</h2><ul><li><a><span title='$count'>$count</span> followers</a></li></ul>$markup</main>","text/html","UTF-8",null)
+            }
+            assertTrue(loaded.await(20,java.util.concurrent.TimeUnit.SECONDS))
+            val inspected=java.util.concurrent.CountDownLatch(1); var json=org.json.JSONObject()
+            onUi {
+                val script=target.resources.openRawResource(R.raw.facts).bufferedReader().use { it.readText() }.replace("__EXPECTED__","\"fiction.one\"")
+                web.evaluateJavascript(script) { raw -> json=org.json.JSONObject(org.json.JSONTokener(raw).nextValue() as String); inspected.countDown() }
+            }
+            assertTrue(inspected.await(20,java.util.concurrent.TimeUnit.SECONDS)); assertEquals(privacy,json.getString("privacy")); assertEquals(count,json.getString("count"))
+        }
+    }
     fun testCardsAreInlineAndLocalizationsExist() {
         val target=activity
         onUi {
