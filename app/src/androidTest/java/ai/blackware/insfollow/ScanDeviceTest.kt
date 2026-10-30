@@ -50,6 +50,7 @@ class ScanDeviceTest : InstrumentationTestCase() {
         assertEquals(2,store.scanPendingKeys().size)
         val fresh=store.scanNext(run)!!; store.finishScan(run,fresh,good,0)
         assertEquals(1,store.scanPendingKeys().size); assertEquals(3,count("scan_history"))
+        assertEquals(1,JSONObject(store.exportScans("eligible")).getJSONArray("accounts").length())
         val session=store.filteredQueue(); val work=store.acquire(session,true)!!
         assertEquals(fresh,work.key); store.finish(work,Verdict(Status.ALREADY,"FOLLOWING_VERIFIED"),"FOLLOWING")
         assertNull(store.acquire(session,true)); assertEquals(2,store.scanResults().size)

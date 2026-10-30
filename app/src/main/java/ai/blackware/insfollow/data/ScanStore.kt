@@ -84,9 +84,10 @@ fun Store.deferFiltered(work: Work,eligibility: Eligibility = Eligibility.FILTER
     db.execSQL("UPDATE sessions SET processedCount=processedCount+1 WHERE sessionId=?",arrayOf(work.session))
 }
 fun Store.exportScans(kind: String): String {
-    val selected=scanResults().filter { when(kind) { "eligible" -> it.eligibility==Eligibility.ELIGIBLE; "filtered" -> it.eligibility==Eligibility.FILTERED; "errors" -> it.eligibility==Eligibility.REVIEW; else -> true } }
+    val pending=scanPendingKeys()
+    val selected=scanResults().filter { row -> val it=row; (kind=="all" || row.key !in pending) && when(kind) { "eligible" -> it.eligibility==Eligibility.ELIGIBLE; "filtered" -> it.eligibility==Eligibility.FILTERED; "errors" -> it.eligibility==Eligibility.REVIEW; else -> true } }
     val rows=JSONArray()
-    selected.forEach { r -> rows.put(JSONObject().put("username",r.key).put("privacy",r.facts.privacy.name).put("followerCount",if(r.facts.count?.exact==true) r.facts.count.lower else JSONObject.NULL).put("followerLower",r.facts.count?.lower ?: JSONObject.NULL).put("followerUpper",r.facts.count?.upper ?: JSONObject.NULL).put("displayedCount",r.facts.count?.raw.orEmpty()).put("checkedAt",r.checkedAt).put("state",r.state.name).put("eligibility",r.eligibility.name).put("reason",r.reason)) }
+    selected.forEach { r -> rows.put(JSONObject().put("username",r.key).put("privacy",r.facts.privacy.name).put("followerCount",if(r.facts.count?.exact==true) r.facts.count.lower else JSONObject.NULL).put("followerLower",r.facts.count?.lower ?: JSONObject.NULL).put("followerUpper",r.facts.count?.upper ?: JSONObject.NULL).put("displayedCount",r.facts.count?.raw.orEmpty()).put("checkedAt",r.checkedAt).put("awaitingRescan",r.key in pending).put("state",r.state.name).put("eligibility",r.eligibility.name).put("reason",r.reason)) }
     return JSONObject().put("version","0.1").put("exportedAt",System.currentTimeMillis()).put("accounts",rows).toString(2)
 }
 
