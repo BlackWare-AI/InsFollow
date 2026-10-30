@@ -69,7 +69,7 @@ class BrowserSession(private val activity: Activity, val events: Events) : Profi
             override fun onReceivedHttpError(view: WebView,request: WebResourceRequest,errorResponse: WebResourceResponse) { if(request.isForMainFrame) events.error(if(errorResponse.statusCode==429) "ACTION_RESTRICTED" else "HTTP_ERROR") }
             override fun onReceivedSslError(view: WebView,handler: SslErrorHandler,error: android.net.http.SslError) { handler.cancel(); events.error("TLS_ERROR") }
             override fun onRenderProcessGone(view: WebView,detail: RenderProcessGoneDetail): Boolean {
-                destroy(); events.rendererGone(); return true
+                this@BrowserSession.destroy(); events.rendererGone(); return true
             }
         }
     }

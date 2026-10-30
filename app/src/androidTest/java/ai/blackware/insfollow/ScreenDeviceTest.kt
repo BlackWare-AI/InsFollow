@@ -9,10 +9,17 @@ import ai.blackware.insfollow.ui.MainActivity
 
 @Suppress("DEPRECATION")
 class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActivity::class.java) {
+    private fun onUi(action: () -> Unit) {
+        var failure: Throwable? = null
+        instrumentation.runOnMainSync {
+            try { action() } catch (error: Throwable) { failure = error }
+        }
+        failure?.let { throw it }
+    }
     private fun descendants(view: View): List<View> = listOf(view)+if(view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
     fun testSingleWebViewAndCollapseDoesNotRecreate() {
         val target=activity
-        instrumentation.runOnMainSync {
+        onUi {
             val root=target.window.decorView
             val first=descendants(root).filterIsInstance<WebView>().single()
             descendants(root).filterIsInstance<Button>().first { it.text==target.getString(R.string.expand) }.performClick()
@@ -23,7 +30,7 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
     }
     fun testCardsAreInlineAndLocalizationsExist() {
         val target=activity
-        instrumentation.runOnMainSync {
+        onUi {
             val views=descendants(target.window.decorView)
             assertTrue(views.filterIsInstance<Button>().any { it.text==target.getString(R.string.configuration) })
             assertTrue(views.filterIsInstance<Button>().any { it.text==target.getString(R.string.restore) })
@@ -33,7 +40,7 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
     }
     fun testReadOnlyDetectorOnLocalFixtures() {
         val target=activity
-        instrumentation.runOnMainSync { descendants(target.window.decorView).filterIsInstance<Button>().firstOrNull { it.text==target.getString(R.string.expand) }?.performClick() }
+        onUi { descendants(target.window.decorView).filterIsInstance<Button>().firstOrNull { it.text==target.getString(R.string.expand) }?.performClick() }
         val cases=listOf(
             "Following" to "FOLLOWING", "Takiptesin" to "FOLLOWING",
             "Requested" to "REQUESTED", "İstek Gönderildi" to "REQUESTED",
@@ -42,7 +49,7 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
         cases.forEach { (label,expected) ->
             val loaded=java.util.concurrent.CountDownLatch(1)
             lateinit var web: WebView
-            instrumentation.runOnMainSync {
+            onUi {
                 web=descendants(target.window.decorView).filterIsInstance<WebView>().single()
                 web.webViewClient=object : android.webkit.WebViewClient() {
                     override fun onPageFinished(view: WebView,url: String) { loaded.countDown() }
@@ -52,7 +59,7 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
             assertTrue(loaded.await(15,java.util.concurrent.TimeUnit.SECONDS))
             val inspected=java.util.concurrent.CountDownLatch(1)
             var result=""
-            instrumentation.runOnMainSync {
+            onUi {
                 val script=target.resources.openRawResource(R.raw.inspect).bufferedReader().use { it.readText() }.replace("__EXPECTED__","\"fiction.one\"")
                 web.evaluateJavascript(script) { raw -> result=org.json.JSONTokener(raw).nextValue().toString(); inspected.countDown() }
             }
@@ -68,12 +75,12 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
         val old=data.setting("min","60")
         data.settings(mapOf("min" to "79"))
         try {
-            instrumentation.runOnMainSync { target.recreate() }
+            onUi { target.recreate() }
             val recreated=monitor.waitForActivityWithTimeout(15000) as? MainActivity
             assertNotNull(recreated)
             setActivity(recreated)
             instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync {
+            onUi {
                 val views=descendants(recreated!!.window.decorView)
                 assertEquals(1,views.filterIsInstance<WebView>().size)
                 val minimum=views.filterIsInstance<android.widget.EditText>().single { it.contentDescription==recreated.getString(R.string.min_interval) }
@@ -85,7 +92,7 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
     fun testSystemBackCollapsesWithoutReplacingBrowser() {
         val target=activity
         lateinit var original: WebView
-        instrumentation.runOnMainSync {
+        onUi {
             original=descendants(target.window.decorView).filterIsInstance<WebView>().single()
             descendants(target.window.decorView).filterIsInstance<Button>().first { it.text==target.getString(R.string.expand) }.performClick()
         }
@@ -93,13 +100,13 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
         val deadline=android.os.SystemClock.uptimeMillis()+5000
         var collapsed=false
         while(!collapsed && android.os.SystemClock.uptimeMillis()<deadline) {
-            instrumentation.runOnMainSync {
+            onUi {
                 collapsed=descendants(target.window.decorView).filterIsInstance<Button>().any { it.text==target.getString(R.string.expand) }
             }
             if(!collapsed) android.os.SystemClock.sleep(50)
         }
         assertTrue("System Back did not collapse the browser",collapsed)
-        instrumentation.runOnMainSync {
+        onUi {
             assertFalse(target.isFinishing)
             assertSame(original,descendants(target.window.decorView).filterIsInstance<WebView>().single())
         }
@@ -108,7 +115,7 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
     fun testRendererTerminationAllowsOneExplicitReplacement() {
         val target=activity
         lateinit var original: WebView
-        instrumentation.runOnMainSync {
+        onUi {
             original=descendants(target.window.decorView).filterIsInstance<WebView>().single()
             descendants(target.window.decorView).filterIsInstance<Button>().first { it.text==target.getString(R.string.expand) }.performClick()
             original.loadDataWithBaseURL("https://www.instagram.com/fiction.one/","<main>Local renderer fixture</main>","text/html","UTF-8",null)
@@ -116,18 +123,18 @@ class ScreenDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(MainActi
         val deadline=android.os.SystemClock.uptimeMillis()+15000
         var terminated=false
         while(!terminated && android.os.SystemClock.uptimeMillis()<deadline) {
-            instrumentation.runOnMainSync { terminated=original.webViewRenderProcess?.terminate()==true }
+            onUi { terminated=original.webViewRenderProcess?.terminate()==true }
             if(!terminated) android.os.SystemClock.sleep(50)
         }
         assertTrue("Renderer did not start or terminate",terminated)
         val handledDeadline=android.os.SystemClock.uptimeMillis()+15000
         var handled=false
         while(!handled && android.os.SystemClock.uptimeMillis()<handledDeadline) {
-            instrumentation.runOnMainSync { handled=target.findViewById<android.widget.TextView>(R.id.error).text==target.getString(R.string.renderer_gone) }
+            onUi { handled=target.findViewById<android.widget.TextView>(R.id.error).text==target.getString(R.string.renderer_gone) }
             if(!handled) android.os.SystemClock.sleep(50)
         }
         assertTrue("Renderer termination was not handled",handled)
-        instrumentation.runOnMainSync {
+        onUi {
             assertFalse(target.isFinishing)
             assertTrue(descendants(target.window.decorView).filterIsInstance<WebView>().isEmpty())
             descendants(target.window.decorView).filterIsInstance<Button>().first { it.text==target.getString(R.string.collapse) }.performClick()
