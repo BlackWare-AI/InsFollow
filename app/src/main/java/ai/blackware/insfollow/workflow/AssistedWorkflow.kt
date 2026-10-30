@@ -16,7 +16,8 @@ class AssistedWorkflow(
     private val schedule: () -> Schedule?,
     private val executor: FollowExecutor,
     private val changed: (Stage,String) -> Unit,
-    private val message: (String) -> Unit
+    private val message: (String) -> Unit,
+    private val pageTimeoutMs: Long = 30_000
 ) {
     private val handler=Handler(Looper.getMainLooper())
     var stage=Stage.PAUSED; private set
@@ -72,9 +73,13 @@ class AssistedWorkflow(
         beginWait(); browser()?.profile(work!!.key)
     }
     private fun beginWait() {
-        generation++; candidate=null; deadline=System.currentTimeMillis()+30_000
+        generation++; candidate=null; deadline=System.currentTimeMillis()+pageTimeoutMs
         transition(if(refreshed) Stage.VERIFYING_RESULT else Stage.WAITING_FOR_PAGE)
         val token=generation
+        // The deadline must also fire when a renderer never returns the JavaScript callback.
+        handler.postDelayed({
+            if(token==generation && running && allowed()) fail("VERIFICATION_TIMEOUT")
+        },pageTimeoutMs)
         handler.postDelayed({ poll(token) },1200)
     }
     private fun poll(token: Int) {

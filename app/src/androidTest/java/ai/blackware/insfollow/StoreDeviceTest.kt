@@ -38,4 +38,21 @@ class StoreDeviceTest : InstrumentationTestCase() {
         assertEquals(annotated,store.annotated(false))
     }
 
+    fun testMissingBrowserCallbackHasIndependentDeadline() {
+        val finished=java.util.concurrent.CountDownLatch(1)
+        lateinit var workflow: ai.blackware.insfollow.workflow.AssistedWorkflow
+        instrumentation.runOnMainSync {
+            workflow=ai.blackware.insfollow.workflow.AssistedWorkflow(
+                store,{null},{ai.blackware.insfollow.queue.Schedule(1,1,java.time.LocalTime.MIN,java.time.LocalTime.MIN,1,1)},
+                object : ai.blackware.insfollow.workflow.FollowExecutor { override fun requestUserAction(account: String) { fail("Unexpected action") } },
+                { stage,_ -> if(stage==Stage.UNCERTAIN) finished.countDown() },{},100
+            )
+            workflow.expanded=true; workflow.foreground(true); workflow.start()
+        }
+        assertTrue(finished.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        instrumentation.waitForIdleSync()
+        assertEquals(1,store.accounts().count { it.status==Status.UNCERTAIN && it.reason=="VERIFICATION_TIMEOUT" })
+        instrumentation.runOnMainSync { workflow.close() }
+    }
+
 }

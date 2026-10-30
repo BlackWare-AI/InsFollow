@@ -36,8 +36,10 @@ jobs:
           disable-animations: true
           script: |
             ./gradlew connectedDebugAndroidTest
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am force-stop ai.blackware.insfollow
-            adb shell am start -W -n ai.blackware.insfollow/.ui.MainActivity | tee startup-api-${{ matrix.api }}.txt
+            adb shell am start -W -n ai.blackware.insfollow/.ui.MainActivity > startup-api-${{ matrix.api }}.txt
+            python3 -c "from pathlib import Path; text = Path('startup-api-${{ matrix.api }}.txt').read_text(); print(text); assert 'Status: ok' in text, 'Startup failed'"
             adb shell dumpsys webviewupdate > webview-api-${{ matrix.api }}.txt
       - uses: actions/upload-artifact@v4
         if: always()

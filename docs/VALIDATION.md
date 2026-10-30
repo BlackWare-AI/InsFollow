@@ -10,8 +10,8 @@ Environment: Linux x86_64, Temurin JDK 17, Android SDK 36, AGP 8.13.2, Gradle 8.
 
 | Artifact | Size | SHA-256 |
 | --- | ---: | --- |
-| Development-key signed debug APK | 2,809,415 bytes | `998c88346820fb31a9bc5af861a560c03f79088ac219b63a1ae33fb9d16e868e` |
-| Minified unsigned release APK | 153,471 bytes | `21838b056a7ab8e75fb6c5f567c74a3d4ea74fa3cf8898a662c73df64833d46e` |
+| Development-key signed debug APK | 2,888,979 bytes | `dbde278e6642da587fb97650fe9d2f3a67fc4a287375c5d56e880c6e2368f495` |
+| Minified unsigned release APK | 153,563 bytes | `6a1126a044e5d3dc5151dff504425cb572831fb9516d84075fe690600af1af19` |
 
 These are local validation artifacts, not a production release. CI rebuilds have their own hashes; build metadata and signing differ.
 
@@ -50,4 +50,4 @@ Repository existed publicly with README and MIT license, no application or AGENT
 
 The available GitHub integration returned **HTTP 403, Resource not accessible by integration** for About/topics, Discussions, secret scanning/push protection, Dependabot alerts/updates and private vulnerability reporting administration. These settings are **not verified/enabled by this implementation**. `scripts/configure_repository.sh` contains the exact requested changes for an owner credential with administration scope. Dependabot configuration and CI/release workflows are supplied as source.
 
-No production signing credentials are configured in this environment. No v0.1 tag or GitHub Release has been published. The release workflow fails unless secure signing secrets and `RELEASE_VALIDATION_APPROVED=true` are present. It never publishes unsigned production artifacts.
+No production signing credentials are configured in this environment. Listing repository Actions secret names was also denied with HTTP 403, so repository-side signing configuration is unverified. No v0.1 tag or GitHub Release has been published. The release workflow fails unless secure signing secrets and `RELEASE_VALIDATION_APPROVED=true` are present. It never publishes unsigned production artifacts.
