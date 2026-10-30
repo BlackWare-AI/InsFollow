@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Private security reporting
+    url: https://github.com/BlackWare-AI/InsFollow/security/advisories/new
+    about: Do not disclose vulnerabilities or secrets in public Issues.

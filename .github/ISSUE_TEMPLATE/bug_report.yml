@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible problem with fictional data only.
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include a minimal fictional fixture; never include cookies, passwords or real account lists.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: App revision, Android and Android System WebView versions
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant sanitized evidence
