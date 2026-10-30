@@ -296,7 +296,7 @@ class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
         }
         if(::dailyStats.isInitialized) {
             val report=org.json.JSONObject(store.dailyReport())
-            dailyStats.text=getString(R.string.daily_statistics,report.getInt("visited"),report.getInt("following"),report.getInt("requested"),report.getInt("failed"),report.getInt("uncertain"))
+            dailyStats.text=getString(R.string.daily_statistics,report.getInt("visited"),report.getInt("following"),report.getInt("requested"),report.getInt("failed"),report.getInt("uncertain"),report.getInt("observations"))
         }
         updateControls()
         if(::search.isInitialized) renderResults()

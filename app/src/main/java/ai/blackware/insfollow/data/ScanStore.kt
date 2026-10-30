@@ -98,7 +98,7 @@ fun Store.dailyReport(date: java.time.LocalDate = java.time.LocalDate.now()): St
         c.moveToFirst(); listOf("visited","following","requested","failed","uncertain").forEachIndexed { i,k -> report.put(k,c.getLong(i)) }
     }
     val scanned=readableDatabase.rawQuery("SELECT count(*) FROM scan_history WHERE checkedAt>=? AND checkedAt<?",arrayOf(start.toString(),end.toString())).use { it.moveToFirst(); it.getInt(0) }
-    report.put("processingVisits",report.getInt("visited")).put("scanned",scanned).put("visited",report.getInt("visited")+scanned)
+    report.put("processingVisits",report.getInt("visited")).put("observations",scanned)
     return report.toString(2)
 }
 fun Store.dailyVisited()=JSONObject(dailyReport()).getInt("processingVisits")

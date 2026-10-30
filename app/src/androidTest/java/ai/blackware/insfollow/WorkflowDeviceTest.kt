@@ -4,6 +4,7 @@ import android.test.InstrumentationTestCase
 import ai.blackware.insfollow.data.FavoritesCodec
 import ai.blackware.insfollow.data.Store
 import ai.blackware.insfollow.data.scanResults
+import ai.blackware.insfollow.data.dailyReport
 import ai.blackware.insfollow.model.*
 import ai.blackware.insfollow.queue.Schedule
 import ai.blackware.insfollow.web.ProfileBrowser
@@ -67,6 +68,7 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         awaitCondition { workflow?.running==false }
         assertEquals(0,actions); assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
         assertEquals(1,store.scanResults().size)
+        val report=org.json.JSONObject(store.dailyReport()); assertEquals(1,report.getInt("visited")); assertEquals(1,report.getInt("observations"))
     }
     fun testDirectRoundedBoundaryRequiresReview() {
         val browser=FixtureBrowser(Observation.FOLLOW).apply { factsValue=ProfileFacts(Privacy.PUBLIC,FollowerNumbers.parse("3K")) }

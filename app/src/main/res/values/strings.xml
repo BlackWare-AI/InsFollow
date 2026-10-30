@@ -149,7 +149,7 @@
     <string name="scan_profile_unavailable">Profile unavailable</string>
     <string name="scan_scan_error">Scan error</string>
     <string name="new_scan_plan">Start a new scan plan (keep observations)</string>
-    <string name="daily_statistics">Today · Visited: %1$d · Following: %2$d · Requested: %3$d · Failed: %4$d · Uncertain: %5$d</string>
+    <string name="daily_statistics">Today · Processing visits: %1$d · Following: %2$d · Requested: %3$d · Failed: %4$d · Uncertain: %5$d · Profile observations: %6$d</string>
     <string name="scan_filter_current">Scan filter: %1$s</string>
     <string name="filtered">Filtered</string>
     <string name="review">Review required</string>

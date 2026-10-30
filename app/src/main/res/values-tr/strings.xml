@@ -149,7 +149,7 @@
     <string name="scan_profile_unavailable">Profil kullanılamıyor</string>
     <string name="scan_scan_error">Tarama hatası</string>
     <string name="new_scan_plan">Yeni tarama planı oluştur (gözlemleri koru)</string>
-    <string name="daily_statistics">Bugün · Ziyaret: %1$d · Takip: %2$d · İstek: %3$d · Başarısız: %4$d · Belirsiz: %5$d</string>
+    <string name="daily_statistics">Bugün · İşlem ziyareti: %1$d · Takip: %2$d · İstek: %3$d · Başarısız: %4$d · Belirsiz: %5$d · Profil gözlemi: %6$d</string>
     <string name="scan_filter_current">Tarama filtresi: %1$s</string>
     <string name="filtered">Filtrelenen</string>
     <string name="review">İnceleme bekleyen</string>
