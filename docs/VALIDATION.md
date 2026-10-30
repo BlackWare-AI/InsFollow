@@ -86,8 +86,31 @@ The initial Android 14 SIGKILL interruption did not reproduce in this complete r
 Local follow-up APKs: debug 2,890,263 bytes, SHA-256 `c031058cfe45264203c07dbf1ee0e7dc109bdaa3a4bad7c449d968ffdce53d89`; minified unsigned release 154,891 bytes, SHA-256 `392dbef88838898cb8c3141a6341092f81b417299c69a84acc9dc3d3ed46c8cc`. These are validation builds and have not replaced the published debug-0.1-1 asset. Physical-device, live Instagram, target InstaPro and remaining manual lifecycle/low-memory gates remain open.
 
 
-## Scan-first and scheduling extension — validation in progress
+## Scan-first and scheduling extension
 
-New source adds conservative follower intervals and filters, weekly-window JVM tests, plus native tests for unique/persistent scans, recovery, independent follow history, recalculation, eligible queue order, schema migration/legacy restore, scan exports, read-only execution, restriction pause, late callbacks, direct filters, budgets and same-instance Home/Browser switching. These fixtures use fictional local profiles only. Earlier passing results above do not validate this extension. Current build/CI evidence will be recorded after the updated tests finish.
+New source adds conservative follower intervals and filters, weekly-window JVM tests, plus native tests for unique/persistent scans, recovery, independent follow history, recalculation, eligible queue order, schema migration/legacy restore, scan exports, read-only execution, restriction pause, late callbacks, direct filters, budgets and same-instance Home/Browser switching. These fixtures use fictional local profiles only. Earlier passing results above do not validate this extension. Final build/CI evidence is recorded below.
 
 No physical Android device is attached in this environment. Physical-device Home/Browser continuity, hidden/minimal WebView rendering, genuine Instagram login/DOM variants/security file upload, public/private classification and specific InstaPro import compatibility remain unverified. Public empty-post accounts and already-followed private/public ambiguity deliberately require review. No real follow operations are used in automated tests.
+
+
+### Scan-first baseline results
+
+[CI run 41107110169](https://github.com/BlackWare-AI/InsFollow/actions/runs/41107110169), source `90148e2`, passed build validation. Downloaded JUnit reports contain **54 JVM tests**, **59 Android 14/API 34 tests** and **59 Android 16/API 36 tests**, with zero failures/errors/skips. CI lint has zero errors and two version warnings (OldTargetApi and AndroidGradlePluginVersion). Explicit post-test APK reinstalls and launches succeeded: process-cold TotalTime 885 ms on API 34 and 1,353 ms on API 36, measured once on shared KVM runners; these are not physical-device performance claims.
+
+These tests include real local WebView DOM fixtures and same-instance tab switching, plus deterministic fake-browser scan/workflow tests. A tab-switch fixture verifies that a running scan is not explicitly paused. It does not prove arbitrary live Instagram layouts or uninterrupted minimal-height WebView rendering on physical devices.
+
+A subsequent session-boundary correction completes an exhausted queue without waiting the configured interval, applies the configured break, and counts filtered profile visits toward the session target. Its extra instrumentation case and latest validation results are recorded below. See [DEVICE_TEST_PLAN.md](DEVICE_TEST_PLAN.md) for outstanding physical-device checks.
+
+
+### Final scan-first verification
+
+[CI run 41109346630](https://github.com/BlackWare-AI/InsFollow/actions/runs/41109346630), application source `f8c2603`, completed successfully. Downloaded JUnit reports confirm **54 JVM tests**, **61 instrumentation tests on Android 14/API 34**, and **61 instrumentation tests on Android 16/API 36**, all with zero failures/errors/skips. This includes immediate exhausted-queue completion/session breaks, filtered visit accounting, separate daily observation/visit counters, and partial-rescan eligibility/export exclusion while retaining prior observations. Pending rescans are excluded from usable progress/eligibility until completed; the history remains intact.
+
+CI lint: zero errors, two version warnings (OldTargetApi and AndroidGradlePluginVersion). Both emulators reinstalled the debug APK and returned `Status: ok` on launch. Single process-cold launch samples: API 34 1,325 ms; API 36 1,743 ms, on shared KVM runners, not physical-device benchmarks. Local `testDebugUnitTest lintDebug assembleDebug assembleRelease assembleDebugAndroidTest` also passed on the same application source after an environment restart interrupted the preceding local build. That interrupted attempt is not counted as a completed check.
+
+| Local artifact | Size | SHA-256 |
+| --- | ---: | --- |
+| Development-key signed debug APK | 2,878,773 bytes | `d3e2ad16ef05ef11b81f81c2b1973ea239a79d7afc311035bdc5146da5a3c430` |
+| Minified unsigned release APK | 206,490 bytes | `70e8e51f5691a1b8e125a8d49b295bcf05596332029a5f0ab6a156b3a7b8296f` |
+
+APK identity/version verification passed: `ai.blackware.insfollow`, versionName `0.1`, versionCode 1, minSdk 34, targetSdk 36. English/Turkish resources contain matching 153 unique keys. These builds do not replace the published older debug-0.1-1 asset and are not a production release. No physical device is connected; physical-device live tab/render continuity, Instagram login/DOM/file-upload compatibility, target InstaPro validation and production signing remain open gates.
