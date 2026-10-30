@@ -53,13 +53,13 @@ class ScanDeviceTest : InstrumentationTestCase() {
     }
     fun testSchemaOneBackupRestoresWithoutScans() {
         val backup=JSONObject(store.backup()).put("schema",1)
-        listOf("scans","scan_history","scan_runs","scan_queue").forEach { backup.remove(it) }
+        listOf("scans","scan_history","scan_runs","scan_queue","eligible_queue").forEach { backup.remove(it) }
         store.saveScan("fiction.one",good); store.restore(backup.toString())
         assertEquals(2,store.accounts().size); assertTrue(store.scanResults().isEmpty())
     }
     fun testSchemaOneDatabaseMigratesWithoutAccountLoss() {
         store.settings(mapOf("min" to "91")); val db=store.writableDatabase
-        listOf("scan_queue","scan_runs","scan_history","scans").forEach { db.execSQL("DROP TABLE $it") }; db.version=1
+        listOf("eligible_queue","scan_queue","scan_runs","scan_history","scans").forEach { db.execSQL("DROP TABLE $it") }; db.version=1
         store.close(); store=Store(instrumentation.targetContext,name)
         assertEquals(2,store.accounts().size); assertEquals("91",store.setting("min","")); assertTrue(store.scanResults().isEmpty()); assertEquals(2,store.readableDatabase.version)
     }

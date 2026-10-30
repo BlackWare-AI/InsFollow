@@ -137,9 +137,10 @@ class AssistedWorkflow(
             if(previous==null) { post(1000) { if(running && token==generation && guard()) inspectEligibility(token,current,facts) }; return@withStorageGuard }
             val verified=if(previous==facts) facts else ProfileFacts(reason="PROFILE_FACTS_CHANGED")
             store.saveScan(current.key,verified.copy(observation=Observation.FOLLOW))
-            if(store.accountFilter().evaluate(verified).second!=Eligibility.ELIGIBLE) {
+            val eligibility=store.accountFilter().evaluate(verified)
+            if(eligibility.second!=Eligibility.ELIGIBLE) {
                 generation++
-                store.transaction { store.deferFiltered(current); store.setNext(current.session,System.currentTimeMillis()+(schedule()?.interval() ?: 60_000)) }
+                store.transaction { store.deferFiltered(current,eligibility.second,eligibility.third); store.setNext(current.session,System.currentTimeMillis()+(schedule()?.interval() ?: 60_000)) }
                 work=null; transition(Stage.COMPLETED); next()
             } else {
                 generation++; transition(Stage.READY_FOR_ACTION); afterAction=true

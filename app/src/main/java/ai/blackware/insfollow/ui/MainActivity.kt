@@ -375,7 +375,7 @@ class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
         val allowedTypes=types.filter { it.matches(Regex("[a-zA-Z0-9.+*-]+/[a-zA-Z0-9.+*-]+")) }.take(20)
         val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(allowedTypes.singleOrNull() ?: "*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,multiple)
         if(allowedTypes.size>1) intent.putExtra(Intent.EXTRA_MIME_TYPES,allowedTypes.toTypedArray())
-        return try { startActivityForResult(intent,WEB_FILE); true } catch(_: Exception) { fileCallback=null; callback.onReceiveValue(null); false }
+        return try { startActivityForResult(intent,WEB_FILE); true } catch(_: Exception) { fileCallback=null; callback.onReceiveValue(null); true }
     }
     override fun started(url: String) { safely {
         workflow.navigation(url)

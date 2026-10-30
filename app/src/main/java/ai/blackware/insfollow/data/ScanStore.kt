@@ -7,11 +7,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 internal object ScanSchema {
-    val tables=listOf("scans","scan_history","scan_runs","scan_queue")
+    val tables=listOf("scans","scan_history","scan_runs","scan_queue","eligible_queue")
     fun create(db: SQLiteDatabase) {
         val fields="accountKey TEXT NOT NULL REFERENCES accounts(accountKey), privacy TEXT NOT NULL, lowerCount INTEGER, upperCount INTEGER, exactCount INTEGER NOT NULL, rawCount TEXT NOT NULL, checkedAt INTEGER NOT NULL, state TEXT NOT NULL, eligibility TEXT NOT NULL, reason TEXT NOT NULL, observation TEXT NOT NULL"
         db.execSQL("CREATE TABLE scans ($fields, PRIMARY KEY(accountKey))")
         db.execSQL("CREATE TABLE scan_history (id INTEGER PRIMARY KEY, $fields)")
+        db.execSQL("CREATE TABLE eligible_queue (sessionId INTEGER NOT NULL REFERENCES sessions(sessionId), accountKey TEXT NOT NULL REFERENCES accounts(accountKey), PRIMARY KEY(sessionId,accountKey))")
         db.execSQL("CREATE TABLE scan_runs (id INTEGER PRIMARY KEY, createdAt INTEGER NOT NULL, state TEXT NOT NULL, nextAt INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE TABLE scan_queue (runId INTEGER NOT NULL REFERENCES scan_runs(id), accountKey TEXT NOT NULL REFERENCES accounts(accountKey), position INTEGER NOT NULL, state TEXT NOT NULL, PRIMARY KEY(runId,accountKey), UNIQUE(runId,position))")
     }
@@ -69,11 +70,15 @@ fun Store.filteredQueue(): Long = transaction { db ->
     recalculateScans()
     val id=session() ?: createQueue()
     settings(mapOf("filtered_$id" to "true"))
+    val selected=selectedKeys().toSet()
+    val completed=accounts().filter { it.status.confirmed }.map { it.key }.toSet()
+    db.delete("eligible_queue","sessionId=?",arrayOf(id.toString()))
+    scanResults().filter { it.key in selected && it.key !in completed && it.eligibility==Eligibility.ELIGIBLE && it.facts.observation==Observation.FOLLOW }.forEach { db.insertOrThrow("eligible_queue",null,rowValues("sessionId" to id,"accountKey" to it.key)) }
     id
 }
-fun Store.deferFiltered(work: Work) = transaction { db ->
+fun Store.deferFiltered(work: Work,eligibility: Eligibility = Eligibility.FILTERED,reason: String = "FILTERED") = transaction { db ->
     // A filtering decision is not a follow outcome and never changes the account's follow code.
-    db.update("operations",rowValues("finishedAt" to System.currentTimeMillis(),"verificationResult" to "FILTERED","errorCode" to "FILTERED","resultingStatus" to null,"stage" to "COMPLETED"),"operationId=? AND finishedAt IS NULL",arrayOf(work.operation.toString()))
+    db.update("operations",rowValues("finishedAt" to System.currentTimeMillis(),"verificationResult" to eligibility.name,"errorCode" to reason,"resultingStatus" to null,"stage" to "COMPLETED"),"operationId=? AND finishedAt IS NULL",arrayOf(work.operation.toString()))
     db.update("queue",rowValues("queueState" to "SKIPPED"),"sessionId=? AND accountKey=?",arrayOf(work.session.toString(),work.key))
 }
 fun Store.exportScans(kind: String): String {
@@ -99,5 +104,5 @@ fun Store.dailyVisited()=JSONObject(dailyReport()).getInt("processingVisits")
 
 fun Store.processingQueueStats(id: Long): Map<String,Int> {
     if(setting("filtered_$id","false")!="true") return queueStats(id)
-    return readableDatabase.rawQuery("SELECT queueState,count(*) FROM queue WHERE sessionId=? AND (queueState!='QUEUED' OR accountKey IN (SELECT accountKey FROM scans WHERE eligibility='ELIGIBLE' AND observation='FOLLOW')) GROUP BY queueState",arrayOf(id.toString())).use { c -> buildMap { while(c.moveToNext()) put(c.getString(0),c.getInt(1)) } }
+    return readableDatabase.rawQuery("SELECT queueState,count(*) FROM queue WHERE sessionId=? AND (queueState!='QUEUED' OR (accountKey IN (SELECT accountKey FROM scans WHERE eligibility='ELIGIBLE' AND observation='FOLLOW') AND accountKey IN (SELECT accountKey FROM eligible_queue WHERE sessionId=queue.sessionId))) GROUP BY queueState",arrayOf(id.toString())).use { c -> buildMap { while(c.moveToNext()) put(c.getString(0),c.getInt(1)) } }
 }
