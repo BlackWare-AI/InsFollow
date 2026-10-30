@@ -80,6 +80,7 @@ fun Store.deferFiltered(work: Work,eligibility: Eligibility = Eligibility.FILTER
     // A filtering decision is not a follow outcome and never changes the account's follow code.
     db.update("operations",rowValues("finishedAt" to System.currentTimeMillis(),"verificationResult" to eligibility.name,"errorCode" to reason,"resultingStatus" to null,"stage" to "COMPLETED"),"operationId=? AND finishedAt IS NULL",arrayOf(work.operation.toString()))
     db.update("queue",rowValues("queueState" to "SKIPPED"),"sessionId=? AND accountKey=?",arrayOf(work.session.toString(),work.key))
+    db.execSQL("UPDATE sessions SET processedCount=processedCount+1 WHERE sessionId=?",arrayOf(work.session))
 }
 fun Store.exportScans(kind: String): String {
     val selected=scanResults().filter { when(kind) { "eligible" -> it.eligibility==Eligibility.ELIGIBLE; "filtered" -> it.eligibility==Eligibility.FILTERED; "errors" -> it.eligibility==Eligibility.REVIEW; else -> true } }

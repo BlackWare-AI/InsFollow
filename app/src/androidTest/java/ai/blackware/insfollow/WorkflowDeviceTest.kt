@@ -66,7 +66,7 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         start(browser,filters=true)
         awaitCondition { workflow?.running==false }
         assertEquals(0,actions); assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
-        assertEquals(2,store.scanResults().size)
+        assertEquals(1,store.scanResults().size)
     }
     fun testDirectRoundedBoundaryRequiresReview() {
         val browser=FixtureBrowser(Observation.FOLLOW).apply { factsValue=ProfileFacts(Privacy.PUBLIC,FollowerNumbers.parse("3K")) }
