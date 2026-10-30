@@ -91,6 +91,18 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         start(browser,config=config); assertTrue("SESSION_LIMIT" in messages); assertFalse(workflow!!.running)
         start(browser,config=config); assertTrue("SESSION_BREAK" in messages); assertEquals(0,browser.navigations)
     }
+    fun testQueueCompletionAppliesSessionBreakWithoutAnExtraInterval() {
+        val browser=FixtureBrowser(Observation.FOLLOWING)
+        start(browser,config=Schedule(3600,3600,LocalTime.MIN,LocalTime.MIN,0,3,breakMinutes=60),afterStart={
+            // Keep one queued account so exhaustion is reached by this verified operation.
+            val current=store.current()!!
+            store.writableDatabase.delete("queue","sessionId=? AND accountKey!=?",arrayOf(current.session.toString(),current.key))
+        })
+        awaitCondition { workflow?.running==false }
+        assertEquals(Stage.COMPLETED,workflow!!.stage)
+        assertTrue(store.setting("break_until","0").toLong()>System.currentTimeMillis())
+        assertEquals(1,store.accounts().count { it.status==Status.ALREADY })
+    }
     private fun awaitCondition(condition: () -> Boolean) {
         val deadline = android.os.SystemClock.uptimeMillis() + 15_000
         var satisfied = false

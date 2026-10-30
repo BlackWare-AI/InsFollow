@@ -82,6 +82,7 @@ class AssistedWorkflow(
         if(!running || !guard()) return
         val id=store.session() ?: run { complete(); return }
         val config=schedule() ?: run { pause(); return }
+        if(store.queuedKey(id,store.setting("filtered_$id","false")=="true")==null) { store.setSession(id,"COMPLETED"); complete(); return }
         if(!budget(id,config)) { pause(); return }
         val wait=store.nextAt(id)-System.currentTimeMillis()
         if(wait>0) { transition(Stage.QUEUED); post(wait.coerceAtMost(1000)) { if(running) next() }; return }
@@ -216,7 +217,15 @@ class AssistedWorkflow(
         if(work==null) return
         settle(Verdict(Status.UNCERTAIN,"USER_SKIPPED"),"USER_SKIPPED",running,true)
     }
-    private fun complete() { running=false; handler.removeCallbacksAndMessages(null); transition(Stage.COMPLETED) }
+    private fun complete() {
+        running=false; handler.removeCallbacksAndMessages(null)
+        val minutes=schedule()?.breakMinutes ?: 0
+        val id=store.latestSession()
+        if(minutes>0 && id!=null && store.countProcessed(id)>0) {
+            store.settings(mapOf("break_until" to (System.currentTimeMillis()+minutes*60_000L).toString()))
+        }
+        transition(Stage.COMPLETED)
+    }
     fun storageFailure() {
         running=false; generation++; handler.removeCallbacksAndMessages(null); stage=Stage.PAUSED
         runCatching { changed(stage,work?.key.orEmpty()) }; message("DATABASE_ERROR")
