@@ -13,7 +13,9 @@ This repository is initial development. Build and test evidence, unverified beha
 - One persistent System WebView session, inline expansion and collapse, no custom password collection.
 - Assisted follow workflow with isolated English/Turkish DOM inspection, repeated observations and refresh verification.
 - Separate following, already-following, requested, failed and uncertain records; confirmed records survive later uncertain observations.
-- Local-time operating hours, including midnight crossings; configurable interval range, saved session limit and navigation-failure stop threshold.
+- Optional scan-first mode (default) and direct assisted processing; separate persistent privacy/follower observations, eligibility and review records.
+- Configurable follower threshold (default 3,000), public/private filters, conservative rounded-count intervals, scan cache/rescan policies and filtered queues preserving existing order.
+- Local-time weekly days and multiple windows per day, midnight crossings, interval range, daily processing-visit target, session target, persisted breaks and navigation-failure stop threshold.
 - Start/resume, pause, stop, skip, explicit recheck, and manual shuffle of remaining queue entries.
 - Search/filter results; JSON and username-based TXT reports; annotated Favorites copies; local application backup and transactional restore.
 - Single Activity, inline collapsible cards, AMOLED black, English and Turkish resources, native Views and minimal dependencies.
@@ -30,9 +32,25 @@ This repository is initial development. Build and test evidence, unverified beha
 7. Review verified results and uncertain observations. Recheck a record explicitly when necessary. Rechecking appends work to the current queue without deleting its history.
 8. Export reports or a separate annotated Favorites copy through the system file picker.
 
-The browser is initially collapsed. **Version 0.1 conservatively pauses processing when collapsed**, because invisible WebView script/render behavior has not been validated on supported devices. Expanding uses the same WebView instance. Start/resume expands it for processing. Moving the Activity into the background, locking the screen, rotation/recreation or renderer loss pauses work. Resume manually. No service or uninterrupted background browsing is promised. Android may recreate the WebView after Activity/process/renderer destruction; cookies use its normal local storage.
+The browser is initially collapsed. **Home** and **Browser** are inline views in the same Activity. Switching between them changes layout only: it does not pause either engine, reload the profile, recreate the WebView or reset cookies. The collapsed WebView stays attached and visible at a minimal height; Android/WebView may still throttle rendering or scripts. Bounded deadlines never turn missing observations into success. This is not a guarantee of reliable invisible processing on every device. Moving the Activity into the background, locking the screen, rotation/recreation or renderer loss pauses work. Resume manually. No service or uninterrupted background browsing is promised. Android may recreate the WebView after Activity/process/renderer destruction; cookies use its normal local storage. Instagram file inputs use Android's document picker; the workflow pauses for user interaction and resumes manually afterward.
 
 Pause does not change account codes. Stop preserves the queue and history; Start / Resume continues that queue. Process interruption finishes an open operation as U / `INTERRUPTED_VERIFICATION`, preserving any earlier confirmed account code. That queue entry is consumed so a potentially completed action is never blindly repeated; explicitly recheck it if needed. Navigation and verification timeouts are U, never F. Restrictions and login challenges pause immediately with no automatic action retry.
+
+## Scanning, filters and scheduling
+
+Choose **Scan first, then process** (default) or **Direct processing** inline. The default minimum is 3,000 followers, public-only and skip-private are enabled, and automatic transition to assisted processing is disabled. Unknown privacy/counts always require review; this conservative rule cannot be disabled. Disabling both privacy filters explicitly allows known private accounts through the eligibility filter; any sent follow request remains R, never S.
+
+Scanning reads only the visible profile DOM and has no follow executor. It persists a shuffled, unique scan plan and every completed observation. Start resumes that plan after pause/process recovery. Cache choices reuse observations, scan missing records, retry errors/review records, rescan checked result rows or rescan all selected folders. **Start a new scan plan** archives an unfinished plan without deleting observations, then Start uses the chosen policy. Completed observations are not automatically expired; their checked date is shown so the user can choose a rescan. Filter changes recalculate eligibility without changing the observation date/history or any follow result.
+
+The scan summary uses real selected-account database counts. Scan states are `NOT_SCANNED`, `SCANNING`, `ELIGIBLE`, `PRIVATE_ACCOUNT`, `BELOW_THRESHOLD`, `FOLLOWER_COUNT_UNKNOWN`, `PRIVACY_UNKNOWN`, `PROFILE_UNAVAILABLE`, and `SCAN_ERROR`. Eligibility is independently `ELIGIBLE`, `FILTERED`, or `REVIEW`; **FILTERED is not a follow failure**. Reasons include `PRIVATE_ACCOUNT`, `BELOW_FOLLOWER_THRESHOLD`, `FOLLOWER_COUNT_UNAVAILABLE`, `PRIVACY_STATUS_UNKNOWN`, and `ROUNDED_COUNT_NEAR_THRESHOLD`. The existing —/S/A/R/F/U codes stay unchanged.
+
+Exact `3.000`/`3,000` counts are accepted. `3K`, `3.5K`, `3,5 B`, `12.4K` and `1M` produce conservative rounding intervals. `3K` straddles 3,000 and requires review; `3.5K` is safely above it. Ambiguous bare B or compact labels with ambiguous grouping are not guessed. Public evidence requires an identified profile, visible posts and a Follow control; visible posts on an already-followed account alone do not prove public privacy. Empty or unfamiliar layouts can therefore require review.
+
+When a scan finishes, the user starts **Process verified eligible accounts**, or explicitly opts into automatic transition. Follow clicks remain manual in either case. A stopped partial scan can also supply its verified eligible records. Selection filters the existing persistent queue without deleting its records, changing completed outcomes or reshuffling its order. Only observed Follow accounts with eligible facts and no confirmed completed result are acquired. Direct processing and filtered processing both re-read facts twice before requesting an action. A changed/unknown observation goes to review, not a follow attempt.
+
+Weekly windows are optional; otherwise the original daily start/end controls apply. Enable days with checkboxes and enter up to eight comma-separated `HH:mm-HH:mm` windows for each. Blank/disabled days do not start work; overnight windows belong to the previous start day. Equal times mean all day. The daily target counts assisted-workflow profile visits, including failed/interrupted attempts; scanning is reported separately and does not consume that action budget. Session targets count recorded follow-workflow results. At a session boundary a persisted break and counter baseline are stored. Resume manually after the break or the next allowed day while the app is foreground. Missed targets never carry over; local calendar dates/timezone are used. Intervals, targets and breaks provide no platform-safety guarantee.
+
+Additional exports are `scan-results.json`, `eligible-accounts.json`, `filtered-accounts.json`, `scan-errors.json` (review/error records), and `daily-report.json`. Scan reports include privacy, raw display, exact count when available, lower/upper count bounds, checked date, eligibility and reason. Daily reports separate total visits, processing visits, scans, following, requested, failed and uncertain follow outcomes. Schema 2 app backups include scan history/plans; schema 1 databases migrate transactionally and schema 1 app backups remain restorable. Originals and authentication storage are never exported or modified by scanning.
 
 ## Supported JSON format
 
@@ -76,11 +94,11 @@ All app-managed data stays in private local storage until you explicitly export 
 
 - Instagram markup and localization change. Inspection recognizes conservative profile-header controls in English and Turkish, requires an expected URL and profile identity evidence, and treats other states as unknown. Many UI variants may require detector updates.
 - A page-finished event is not verification. Bounded polling requires repeated consistent observations; confirmed outcomes require a refreshed profile. This still needs live device validation.
-- Invisible WebViews, Activity lifecycle and Android background restrictions prevent an uninterrupted browsing guarantee. Collapsed processing is intentionally unsupported pending testing.
+- Invisible/minimal-size WebViews and Android lifecycle restrictions prevent an uninterrupted browsing guarantee. Tab switching does not explicitly pause the engine; actual rendering continuity on physical devices remains unverified. Deadlines preserve uncertainty.
 - Automated interactions can violate platform terms. Version 0.1 only requests user actions. Execution, navigation, scheduling and verification are separate components for future authorized work.
 - Intervals and session limits do not guarantee account safety. There is no challenge solving, restriction bypass, rate-limit evasion, proxy rotation, fingerprint spoofing or hidden account activity.
 - Requests to private accounts are R until accepted. Unavailable profiles may have changed usernames. Website responses and connection failures can remain uncertain.
-- Restore supports schema 1 only and must fit the backup limit. No migration from INSFAV applications is performed. No other application’s files or data are modified.
+- Restore supports schema 1 and 2 and must fit the backup limit. No migration from INSFAV applications is performed. No other application’s files or data are modified.
 
 ## Development
 

@@ -2,11 +2,11 @@ package ai.blackware.insfollow.workflow
 
 import android.os.Handler
 import android.os.Looper
-import ai.blackware.insfollow.data.Store
+import ai.blackware.insfollow.data.*
 import ai.blackware.insfollow.model.*
 import ai.blackware.insfollow.queue.Schedule
 import ai.blackware.insfollow.web.ProfileBrowser
-import java.time.LocalTime
+import java.time.LocalDateTime
 
 /** Follow execution is deliberately a separate user-only capability. */
 interface FollowExecutor { fun requestUserAction(account: String) }
@@ -17,7 +17,8 @@ class AssistedWorkflow(
     private val executor: FollowExecutor,
     private val changed: (Stage,String) -> Unit,
     private val message: (String) -> Unit,
-    private val pageTimeoutMs: Long = 30_000
+    private val pageTimeoutMs: Long = 30_000,
+    private val enforceFilters: Boolean = false
 ) {
     private val handler=Handler(Looper.getMainLooper())
     var stage=Stage.PAUSED; private set
@@ -39,7 +40,7 @@ class AssistedWorkflow(
         handler.postDelayed({ withStorageGuard(action) },delay)
     }
     private fun transition(next: Stage) { stage=next; work?.let { store.stage(it,next,afterAction) }; changed(next,work?.key.orEmpty()) }
-    private fun allowed(): Boolean = active && expanded && schedule()?.allows(LocalTime.now())==true
+    private fun allowed(): Boolean = active && expanded && schedule()?.allows(LocalDateTime.now())==true
     private fun guard(): Boolean {
         if(!allowed()) { pause(); message("OUTSIDE_SCHEDULE"); return false }; return true
     }
@@ -49,9 +50,9 @@ class AssistedWorkflow(
         if(running) return
         val config=schedule() ?: return
         if(!active || !expanded) { message("EXPAND_REQUIRED"); return }
-        if(!config.allows(LocalTime.now())) { message("OUTSIDE_SCHEDULE"); return }
+        if(!config.allows(LocalDateTime.now())) { message("OUTSIDE_SCHEDULE"); return }
         val id=store.session() ?: store.createQueue()
-        if(config.limit>0 && store.countProcessed(id)>=config.limit) { message("SESSION_LIMIT"); return }
+        if(!budget(id,config)) return
         running=true; store.setSession(id,"RUNNING")
         work=store.current()
         if(work!=null) {
@@ -60,6 +61,17 @@ class AssistedWorkflow(
             refreshed=afterAction; refresh()
         } else next()
         tick()
+    }
+    private fun budget(id: Long,config: Schedule): Boolean {
+        if(config.dailyLimit>0 && store.dailyVisited()>=config.dailyLimit) { message("DAILY_LIMIT"); return false }
+        val until=store.setting("break_until","0").toLongOrNull() ?: 0
+        if(System.currentTimeMillis()<until) { message("SESSION_BREAK"); return false }
+        val baseline=store.setting("budget_$id","0").toIntOrNull() ?: 0
+        if(config.limit>0 && store.countProcessed(id)-baseline>=config.limit) {
+            store.settings(mapOf("budget_$id" to store.countProcessed(id).toString(),"break_until" to (System.currentTimeMillis()+config.breakMinutes*60_000L).toString()))
+            message("SESSION_LIMIT"); return false
+        }
+        return true
     }
     private fun tick() {
         if(!running) return
@@ -70,10 +82,10 @@ class AssistedWorkflow(
         if(!running || !guard()) return
         val id=store.session() ?: run { complete(); return }
         val config=schedule() ?: run { pause(); return }
-        if(config.limit>0 && store.countProcessed(id)>=config.limit) { pause(); message("SESSION_LIMIT"); return }
+        if(!budget(id,config)) { pause(); return }
         val wait=store.nextAt(id)-System.currentTimeMillis()
         if(wait>0) { transition(Stage.QUEUED); post(wait.coerceAtMost(1000)) { if(running) next() }; return }
-        work=store.acquire(id)
+        work=store.acquire(id,store.setting("filtered_$id","false")=="true")
         if(work==null) { complete(); return }
         afterAction=false; refreshed=false; candidate=null
         transition(Stage.OPENING_PROFILE)
@@ -103,7 +115,9 @@ class AssistedWorkflow(
                 }
                 if(observation==Observation.UNKNOWN) { candidate=null; post(1000) { poll(token) }; return@withStorageGuard }
                 if(candidate!=observation) { candidate=observation; post(1000) { poll(token) }; return@withStorageGuard }
-                if(!refreshed && observation==Observation.FOLLOW) {
+                if(!refreshed && observation==Observation.FOLLOW && enforceFilters) {
+                    inspectEligibility(token,current)
+                } else if(!refreshed && observation==Observation.FOLLOW) {
                     generation++; transition(Stage.READY_FOR_ACTION); afterAction=true
                     transition(Stage.AWAITING_USER_ACTION); executor.requestUserAction(current.key)
                     watchUserAction(generation)
@@ -115,6 +129,23 @@ class AssistedWorkflow(
                 }
             }
         }
+    }
+    private fun inspectEligibility(token: Int,current: Work,previous: ProfileFacts? = null) {
+        browser()?.facts(current.key) { facts -> withStorageGuard {
+            if(token!=generation || !running || !allowed()) return@withStorageGuard
+            if(facts.reason in setOf("LOGIN_REQUIRED","ACTION_RESTRICTED")) { fail(facts.reason); return@withStorageGuard }
+            if(previous==null) { post(1000) { if(running && token==generation && guard()) inspectEligibility(token,current,facts) }; return@withStorageGuard }
+            val verified=if(previous==facts) facts else ProfileFacts(reason="PROFILE_FACTS_CHANGED")
+            store.saveScan(current.key,verified.copy(observation=Observation.FOLLOW))
+            if(store.accountFilter().evaluate(verified).second!=Eligibility.ELIGIBLE) {
+                generation++
+                store.transaction { store.deferFiltered(current); store.setNext(current.session,System.currentTimeMillis()+(schedule()?.interval() ?: 60_000)) }
+                work=null; transition(Stage.COMPLETED); next()
+            } else {
+                generation++; transition(Stage.READY_FOR_ACTION); afterAction=true
+                transition(Stage.AWAITING_USER_ACTION); executor.requestUserAction(current.key); watchUserAction(generation)
+            }
+        } }
     }
     private fun watchUserAction(token: Int) {
         post(2000) {

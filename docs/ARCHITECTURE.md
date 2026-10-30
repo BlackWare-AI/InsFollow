@@ -29,3 +29,14 @@ onPageFinished only flushes normal cookies. Inspection polls with a 30-second de
 - Android [AGP 8.13 compatibility](https://developer.android.com/build/releases/past-releases/agp-8-13-0-release-notes): Gradle 8.13, JDK 17, API 36 support.
 
 These contracts inform design; they do not replace device testing. See VALIDATION.md for evidence and outstanding checks.
+
+
+## Scan-first extension (schema 2)
+
+ScanStore adds latest observations, immutable scan_history, scan_runs and a unique ordered scan_queue. Schema 1 upgrades create only new tables; follow rows are untouched. Application restore accepts legacy schema 1 backups with empty scan tables and validates schema 2 scan values before commit. Filtering states never enter the follow-code column. A direct-filter rejection records a FILTERED operation observation and skips its queue entry, leaving the account follow result unchanged.
+
+ScanWorkflow depends only on ProfileBrowser navigation/facts/inspection; it cannot call FollowExecutor. Two matching bounded DOM observations precede a committed fact set. Login/restriction events pause without consuming a scan entry. Foreground loss invalidates callback generations; recovery requeues SCANNING entries and retains completed observations. Scan and assisted engines are mutually exclusive in the UI. Auto-transition is opt-in and uses the same BrowserSession.
+
+Home/Browser are layout states, not Activities or browser tabs. The attached WebView keeps a minimal nonzero layout on Home and expands in Browser. Layout switching does not call pause/reload/loadUrl/create. Activity onPause still pauses both engines and the WebView. Actual collapsed rendering is implementation-dependent; independent deadlines prevent false confirmations. A file-input callback uses only SAF URIs explicitly chosen by the user and is cancelled on Activity destruction.
+
+Weekly scheduling evaluates current-day windows plus previous-day overnight tails in local time. Daily processing-visit counts derive from durable operation timestamps, with no target carryover. Session counter baselines and break deadlines persist in settings and app backups. Neither engine promises background continuation or automatic wakeup.

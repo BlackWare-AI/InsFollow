@@ -84,3 +84,10 @@ Source `8d3d92d`: the Android 16 CI JUnit report contains 38 tests with zero fai
 The initial Android 14 SIGKILL interruption did not reproduce in this complete rerun. The local Android 14 software-emulator renderer-only test passed, but its subsequent full-suite attempt exceeded a 15-second fixture-page wait and was stopped after accelerated CI provided complete coverage. That partial local run is **not** a passing full-suite result. No real Instagram follow action was used by these tests.
 
 Local follow-up APKs: debug 2,890,263 bytes, SHA-256 `c031058cfe45264203c07dbf1ee0e7dc109bdaa3a4bad7c449d968ffdce53d89`; minified unsigned release 154,891 bytes, SHA-256 `392dbef88838898cb8c3141a6341092f81b417299c69a84acc9dc3d3ed46c8cc`. These are validation builds and have not replaced the published debug-0.1-1 asset. Physical-device, live Instagram, target InstaPro and remaining manual lifecycle/low-memory gates remain open.
+
+
+## Scan-first and scheduling extension — validation in progress
+
+New source adds conservative follower intervals and filters, weekly-window JVM tests, plus native tests for unique/persistent scans, recovery, independent follow history, recalculation, eligible queue order, schema migration/legacy restore, scan exports, read-only execution, restriction pause, late callbacks, direct filters, budgets and same-instance Home/Browser switching. These fixtures use fictional local profiles only. Earlier passing results above do not validate this extension. Current build/CI evidence will be recorded after the updated tests finish.
+
+No physical Android device is attached in this environment. Physical-device Home/Browser continuity, hidden/minimal WebView rendering, genuine Instagram login/DOM variants/security file upload, public/private classification and specific InstaPro import compatibility remain unverified. Public empty-post accounts and already-followed private/public ambiguity deliberately require review. No real follow operations are used in automated tests.

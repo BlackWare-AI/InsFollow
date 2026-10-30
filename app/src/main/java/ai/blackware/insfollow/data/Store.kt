@@ -11,7 +11,7 @@ import ai.blackware.insfollow.queue.QueueOrder
 import org.json.JSONArray
 import org.json.JSONObject
 
-class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(context, name, null, 1) {
+class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(context, name, null, 2) {
     init { setWriteAheadLoggingEnabled(true) }
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
@@ -26,8 +26,9 @@ class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(
         db.execSQL("CREATE UNIQUE INDEX one_open_operation ON operations(sessionId) WHERE finishedAt IS NULL")
         db.execSQL("CREATE TABLE settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)")
         db.execSQL("CREATE TABLE provenance (hash TEXT PRIMARY KEY, sourceId INTEGER NOT NULL REFERENCES sources(id))")
+        ScanSchema.create(db)
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) { error("Explicit migration required") }
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) { if(oldVersion<2) ScanSchema.create(db) }
     private fun now() = System.currentTimeMillis()
     fun <T> transaction(block: (SQLiteDatabase) -> T): T {
         val db = writableDatabase
@@ -80,9 +81,9 @@ class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(
     fun setNext(id: Long, timestamp: Long) { writableDatabase.update("sessions",values("nextAt" to timestamp),"sessionId=?",arrayOf(id.toString())) }
     fun countProcessed(id: Long) = scalar("SELECT processedCount FROM sessions WHERE sessionId=?",arrayOf(id.toString())).toInt()
     fun current(): Work? = readableDatabase.rawQuery("SELECT accountKey,operationId,sessionId,previousStatus FROM operations WHERE finishedAt IS NULL ORDER BY operationId DESC LIMIT 1",null).use { if(it.moveToFirst()) Work(it.getString(0),it.getLong(1),it.getLong(2),Status.from(it.getString(3))) else null }
-    fun acquire(id: Long): Work? = transaction { db ->
+    fun acquire(id: Long, eligibleOnly: Boolean = false): Work? = transaction { db ->
         current()?.let { return@transaction it }
-        val key = db.rawQuery("SELECT accountKey FROM queue WHERE sessionId=? AND queueState='QUEUED' ORDER BY queuePosition LIMIT 1",arrayOf(id.toString())).use { if(it.moveToFirst()) it.getString(0) else null } ?: run { setSession(id,"COMPLETED"); return@transaction null }
+        val key = db.rawQuery("SELECT accountKey FROM queue WHERE sessionId=? AND queueState='QUEUED'" + (if(eligibleOnly) " AND accountKey IN (SELECT accountKey FROM scans WHERE eligibility='ELIGIBLE' AND observation='FOLLOW') AND accountKey IN (SELECT accountKey FROM accounts WHERE status NOT IN ('S','A','R','F'))" else "") + " ORDER BY queuePosition LIMIT 1",arrayOf(id.toString())).use { if(it.moveToFirst()) it.getString(0) else null } ?: run { setSession(id,"COMPLETED"); return@transaction null }
         val previous = db.rawQuery("SELECT status FROM accounts WHERE accountKey=?",arrayOf(key)).use { it.moveToFirst(); Status.from(it.getString(0)) }
         val operation = db.insertOrThrow("operations",null,values("sessionId" to id,"accountKey" to key,"startedAt" to now(),"previousStatus" to previous.code,"stage" to Stage.OPENING_PROFILE.name))
         db.execSQL("UPDATE accounts SET attemptCount=attemptCount+1,lastOperationId=? WHERE accountKey=?",arrayOf<Any>(operation,key))
@@ -106,6 +107,7 @@ class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(
         val interrupted = db.rawQuery("SELECT accountKey,operationId,sessionId,previousStatus FROM operations WHERE finishedAt IS NULL",null).use { c -> buildList { while(c.moveToNext()) add(Work(c.getString(0),c.getLong(1),c.getLong(2),Status.from(c.getString(3)))) } }
         interrupted.forEach { finish(it,Verdict(Status.UNCERTAIN,"INTERRUPTED_VERIFICATION"),"INTERRUPTED") }
         db.execSQL("UPDATE sessions SET state='PAUSED' WHERE state='RUNNING'")
+        db.execSQL("UPDATE scan_queue SET state='QUEUED' WHERE state='SCANNING'")
     }
     fun recheck(key: String): Long = transaction { db ->
         require(current() == null) { "OPERATION_ACTIVE" }
@@ -126,7 +128,7 @@ class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(
         val output = FavoritesCodec.annotate(source.second,accounts().associate { it.key to it.status },includeFailures)
         db.insertWithOnConflict("provenance",null,values("hash" to FavoritesCodec.digest(output),"sourceId" to source.first),SQLiteDatabase.CONFLICT_REPLACE); output
     }
-    private val tables = listOf("accounts","sources","folders","memberships","sessions","queue","operations","settings","provenance")
+    private val tables = listOf("accounts","sources","folders","memberships","sessions","queue","operations","settings","provenance") + ScanSchema.tables
     fun export(statuses: Set<Status>?): String = transaction { db ->
         val rows = JSONArray()
         db.rawQuery("SELECT * FROM accounts ORDER BY accountKey",null).use { c -> while(c.moveToNext()) {
@@ -139,13 +141,13 @@ class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(
         output.toString(2)
     }
     fun backup(): String = transaction { db ->
-        val json = JSONObject().put("format","insfollow-local").put("schema",1).put("createdAt",now())
+        val json = JSONObject().put("format","insfollow-local").put("schema",2).put("createdAt",now())
         tables.forEach { table -> val rows = JSONArray(); largeQuery(db,"SELECT * FROM $table").use { c -> while(c.moveToNext()) { val row = JSONObject(); for(i in 0 until c.columnCount) row.put(c.getColumnName(i),if(c.isNull(i)) JSONObject.NULL else if(c.getType(i)==android.database.Cursor.FIELD_TYPE_INTEGER) c.getLong(i) else c.getString(i)); rows.put(row) } }; json.put(table,rows) }; json.toString().also { FavoritesCodec.bounded(it,32*1024*1024) }
     }
     fun restore(raw: String) {
         FavoritesCodec.bounded(raw,32*1024*1024); JsonText.validate(raw)
         val json = JSONObject(raw)
-        require(json.getString("format")=="insfollow-local" && json.getInt("schema")==1) { "INVALID_BACKUP" }
+        require(json.getString("format")=="insfollow-local" && json.getInt("schema") in 1..2) { "INVALID_BACKUP" }
         val accounts = json.getJSONArray("accounts")
         require(accounts.length() <= FavoritesCodec.MAX_ITEMS) { "INPUT_TOO_LARGE" }
         for(i in 0 until accounts.length()) { val row=accounts.getJSONObject(i); require(Identity.normalize(row.getString("originalUsername"))==row.getString("accountKey")); Status.from(row.getString("status")) }
@@ -156,7 +158,7 @@ class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(
             tables.reversed().forEach { db.delete(it,null,null) }
             tables.forEach { table ->
                 val columns=db.rawQuery("SELECT * FROM $table LIMIT 0",null).use { it.columnNames.toSet() }
-                val rows=json.getJSONArray(table); require(rows.length() <= 500_000)
+                val rows=if(json.getInt("schema")==1 && table in ScanSchema.tables) JSONArray() else json.getJSONArray(table); require(rows.length() <= 500_000)
                 for(i in 0 until rows.length()) {
                     val row=rows.getJSONObject(i); require(row.keys().asSequence().toSet()==columns) { "INVALID_BACKUP" }
                     val vals=ContentValues(); columns.forEach { column -> val value=row.get(column); when { value==JSONObject.NULL -> vals.putNull(column); value is Number -> vals.put(column,value.toLong()); value is String -> vals.put(column,value); else -> error("INVALID_BACKUP") } }
@@ -165,6 +167,10 @@ class Store(context: Context, name: String = "insfollow.db") : SQLiteOpenHelper(
             }
             db.rawQuery("PRAGMA foreign_key_check",null).use { require(!it.moveToFirst()) { "INVALID_BACKUP" } }
             db.rawQuery("SELECT accountKey FROM queue WHERE queueState='INFLIGHT' AND NOT EXISTS(SELECT 1 FROM operations o WHERE o.accountKey=queue.accountKey AND o.sessionId=queue.sessionId AND o.finishedAt IS NULL)",null).use { require(!it.moveToFirst()) { "INVALID_BACKUP" } }
+            scanResults().forEach { row ->
+                require(row.checkedAt>=0)
+                row.facts.count?.let { require(it.lower>=0 && it.upper>=it.lower && it.upper<=1_000_000_000_000L) }
+            }
             recover()
         }
     }

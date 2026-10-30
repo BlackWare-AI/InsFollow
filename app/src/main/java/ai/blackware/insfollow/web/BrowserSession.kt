@@ -7,7 +7,7 @@ import android.net.Uri
 import android.view.MotionEvent
 import android.webkit.*
 import ai.blackware.insfollow.R
-import ai.blackware.insfollow.model.Identity
+import ai.blackware.insfollow.model.*
 import ai.blackware.insfollow.model.Observation
 import org.json.JSONTokener
 import org.json.JSONObject
@@ -18,6 +18,7 @@ class BrowserSession(private val activity: Activity, val events: Events) : Profi
         fun finished()
         fun error(reason: String)
         fun rendererGone()
+        fun chooseFile(callback: ValueCallback<Array<Uri>>, types: Array<String>, multiple: Boolean): Boolean = false
     }
     private var destroyed = false
     private var expected: String? = null
@@ -50,6 +51,9 @@ class BrowserSession(private val activity: Activity, val events: Events) : Profi
             override fun onJsConfirm(view: WebView?,url: String?,message: String?,result: JsResult): Boolean { result.cancel(); return true }
             override fun onJsPrompt(view: WebView?,url: String?,message: String?,defaultValue: String?,result: JsPromptResult): Boolean { result.cancel(); return true }
             override fun onPermissionRequest(request: PermissionRequest) { request.deny() }
+            override fun onShowFileChooser(webView: WebView,filePathCallback: ValueCallback<Array<Uri>>,params: FileChooserParams): Boolean {
+                return events.chooseFile(filePathCallback,params.acceptTypes,params.mode==FileChooserParams.MODE_OPEN_MULTIPLE)
+            }
         }
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -83,6 +87,17 @@ class BrowserSession(private val activity: Activity, val events: Events) : Profi
         view.evaluateJavascript(script) { raw ->
             val observation=runCatching { Observation.valueOf(JSONTokener(raw).nextValue() as String) }.getOrDefault(Observation.UNKNOWN)
             result(observation)
+        }
+    }
+    override fun facts(key: String, result: (ProfileFacts) -> Unit) {
+        if(destroyed) { result(ProfileFacts(reason="RENDERER_GONE")); return }
+        val script=activity.resources.openRawResource(R.raw.facts).bufferedReader().use { it.readText() }.replace("__EXPECTED__",JSONObject.quote(key))
+        view.evaluateJavascript(script) { raw ->
+            val facts=runCatching {
+                val json=JSONObject(JSONTokener(raw).nextValue() as String)
+                ProfileFacts(Privacy.valueOf(json.getString("privacy")),FollowerNumbers.parse(json.getString("count")),json.getString("reason"))
+            }.getOrDefault(ProfileFacts())
+            result(facts)
         }
     }
     fun resume() { if(!destroyed) view.onResume() }
