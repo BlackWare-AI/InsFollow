@@ -15,6 +15,8 @@ class ScanWorkflow(private val store: Store,private val browser: () -> ProfileBr
     var current: String?=null; private set
     private var token=0
     private var run: Long?=null
+    private var lastFacts: ProfileFacts?=null
+    private var lastResponseAt=0L
     private fun guarded(action: () -> Unit) { try { action() } catch(_: android.database.SQLException) { pause(); message("DATABASE_ERROR") } }
     private fun post(delay: Long,action: () -> Unit) { handler.postDelayed({ guarded(action) },delay) }
     fun start(policy: ScanPolicy,selected: Set<String> = emptySet()) = guarded {
@@ -35,11 +37,17 @@ class ScanWorkflow(private val store: Store,private val browser: () -> ProfileBr
         if(wait>0) { post(wait.coerceAtMost(1000)) { next() }; return }
         current=store.scanNext(id)
         val key=current ?: run { running=false; changed(); completed(); return }
-        token++; val generation=token
+        token++; lastFacts=null; lastResponseAt=0L; val generation=token
         browser()?.profile(key); changed()
         post(timeout) {
             if(running && token==generation) {
-                if(allowed()) { finish(ProfileFacts(reason="SCAN_TIMEOUT"),false); message("VERIFICATION_TIMEOUT") } else pause()
+                if(allowed()) {
+                    val facts=lastFacts
+                    if(facts!=null && System.currentTimeMillis()-lastResponseAt<3500) {
+                        // A responsive page with unreadable facts belongs in review; it must not stall the scan.
+                        finish(ProfileFacts(reason="PROFILE_FACTS_UNAVAILABLE"))
+                    } else { finish(ProfileFacts(reason="SCAN_TIMEOUT"),false); message("VERIFICATION_TIMEOUT") }
+                } else pause()
             }
         }
         post(1200) { poll(generation,null) }
@@ -51,6 +59,7 @@ class ScanWorkflow(private val store: Store,private val browser: () -> ProfileBr
         browser()?.facts(key) { facts -> guarded {
             if(!running || token!=generation) return@guarded
             if(!allowed()) { pause(); return@guarded }
+            lastFacts=facts; lastResponseAt=System.currentTimeMillis()
             if(facts.reason in setOf("LOGIN_REQUIRED","ACTION_RESTRICTED")) { pause(); message(facts.reason); return@guarded }
             if(facts==previous && (facts.privacy!=Privacy.UNKNOWN || facts.count!=null || facts.reason=="PROFILE_UNAVAILABLE")) {
                 browser()?.inspect(key) { observation -> guarded {

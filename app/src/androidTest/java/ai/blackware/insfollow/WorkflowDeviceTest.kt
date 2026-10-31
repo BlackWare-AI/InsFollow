@@ -24,11 +24,13 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
     private class FixtureBrowser(var observation: Observation) : ProfileBrowser {
         var factsValue=ProfileFacts(Privacy.PUBLIC,FollowerNumbers.parse("4000"),observation=Observation.FOLLOW)
         override fun facts(key: String,result: (ProfileFacts)->Unit) { result(factsValue) }
+        val visits=mutableListOf<String>()
+        var onProfile: (String)->Unit = {}
         var navigations = 0
         var inspections = 0
         var defer = false
         var callback: ((Observation) -> Unit)? = null
-        override fun profile(key: String) { navigations++ }
+        override fun profile(key: String) { navigations++; visits.add(key); onProfile(key) }
         override fun inspect(key: String, result: (Observation) -> Unit) {
             inspections++
             if (defer) callback = result else result(observation)
@@ -62,6 +64,29 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         }
     }
 
+    private fun assertFilteredContinuation(observation: Observation,facts: ProfileFacts,timeout: Long=10_000) {
+        val session=store.createQueue()
+        val order=store.readableDatabase.rawQuery("SELECT accountKey FROM queue WHERE sessionId=? ORDER BY queuePosition",arrayOf(session.toString())).use { c -> buildList { while(c.moveToNext()) add(c.getString(0)) } }
+        val deadlines=mutableListOf<Pair<Long,Long>>()
+        val browser=FixtureBrowser(observation).apply {
+            factsValue=facts
+            onProfile={ deadlines.add(System.currentTimeMillis() to store.nextAt(session)) }
+        }
+        start(browser,timeout,filters=true,config=Schedule(1,2,LocalTime.MIN,LocalTime.MIN,0,3))
+        awaitCondition { workflow?.running==false }
+        assertEquals(order,browser.visits)
+        assertEquals(2,store.scanResults().size); assertEquals(2,store.countProcessed(session))
+        assertEquals(0,actions); assertFalse("VERIFICATION_TIMEOUT" in messages)
+        assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
+        assertTrue(deadlines[1].second>0); assertTrue(deadlines[1].first>=deadlines[1].second)
+        assertEquals(2,store.queueStats(session)["SKIPPED"])
+    }
+    fun testPrivateRejectionContinuesWithIntervalAndOriginalQueueOrder() = assertFilteredContinuation(
+        Observation.FOLLOW,ProfileFacts(Privacy.PRIVATE,FollowerNumbers.parse("5000")))
+    fun testUnreadableFollowControlStillSkipsBelowThresholdProfile() = assertFilteredContinuation(
+        Observation.UNKNOWN,ProfileFacts(Privacy.PUBLIC,FollowerNumbers.parse("1000")))
+    fun testResponsiveUnknownProfileGoesToReviewAndContinues() = assertFilteredContinuation(
+        Observation.UNKNOWN,ProfileFacts(),3500)
     fun testDirectFilteringNeverRequestsUserFollowForPrivateAccounts() {
         val browser=FixtureBrowser(Observation.FOLLOW).apply { factsValue=ProfileFacts(Privacy.PRIVATE,FollowerNumbers.parse("5000")) }
         start(browser,filters=true)
