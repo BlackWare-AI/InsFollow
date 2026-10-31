@@ -32,6 +32,8 @@ class AssistedWorkflow(
     private var generation=0
     private var deadline=0L
     private var failures=0
+    private var unknownFacts: ProfileFacts?=null
+    private var factsResponseAt=0L
     private val stopReasons=setOf("ACTION_RESTRICTED","LOGIN_REQUIRED","RENDERER_GONE","NAVIGATION_BLOCKED","VERIFICATION_TIMEOUT")
     private fun withStorageGuard(action: () -> Unit) {
         try { action() } catch (_: android.database.SQLException) { storageFailure() }
@@ -93,18 +95,18 @@ class AssistedWorkflow(
         beginWait(); browser()?.profile(work!!.key)
     }
     private fun beginWait() {
-        generation++; candidate=null; deadline=System.currentTimeMillis()+pageTimeoutMs
+        generation++; candidate=null; unknownFacts=null; factsResponseAt=0L; deadline=System.currentTimeMillis()+pageTimeoutMs
         transition(if(refreshed) Stage.VERIFYING_RESULT else Stage.WAITING_FOR_PAGE)
         val token=generation
         // The deadline must also fire when a renderer never returns the JavaScript callback.
         post(pageTimeoutMs) {
-            if(token==generation && running && allowed()) fail("VERIFICATION_TIMEOUT")
+            if(token==generation && running && allowed()) pageTimedOut()
         }
         post(1200) { poll(token) }
     }
     private fun poll(token: Int) {
         if(token!=generation || !running || !guard()) return
-        if(System.currentTimeMillis()>deadline) { fail("VERIFICATION_TIMEOUT"); return }
+        if(System.currentTimeMillis()>deadline) { pageTimedOut(); return }
         val current=work ?: return
         transition(if(refreshed) Stage.VERIFYING_RESULT else Stage.INSPECTING_PROFILE)
         browser()?.inspect(current.key) { observation ->
@@ -114,7 +116,12 @@ class AssistedWorkflow(
                     settle(Results.decide(observation,afterAction),observation.name,false)
                     message(if(observation==Observation.LOGIN) "LOGIN_REQUIRED" else "ACTION_RESTRICTED"); return@withStorageGuard
                 }
-                if(observation==Observation.UNKNOWN) { candidate=null; post(1000) { poll(token) }; return@withStorageGuard }
+                if(observation==Observation.UNKNOWN) {
+                    candidate=null
+                    if(enforceFilters && !refreshed && !afterAction) inspectUnknownProfile(token,current)
+                    else post(1000) { poll(token) }
+                    return@withStorageGuard
+                }
                 if(candidate!=observation) { candidate=observation; post(1000) { poll(token) }; return@withStorageGuard }
                 if(!refreshed && observation==Observation.FOLLOW && enforceFilters) {
                     inspectEligibility(token,current)
@@ -137,17 +144,43 @@ class AssistedWorkflow(
             if(facts.reason in setOf("LOGIN_REQUIRED","ACTION_RESTRICTED")) { fail(facts.reason); return@withStorageGuard }
             if(previous==null) { post(1000) { if(running && token==generation && guard()) inspectEligibility(token,current,facts) }; return@withStorageGuard }
             val verified=if(previous==facts) facts else ProfileFacts(reason="PROFILE_FACTS_CHANGED")
-            store.saveScan(current.key,verified.copy(observation=Observation.FOLLOW))
-            val eligibility=store.accountFilter().evaluate(verified)
-            if(eligibility.second!=Eligibility.ELIGIBLE) {
-                generation++
-                store.transaction { store.deferFiltered(current,eligibility.second,eligibility.third); store.setNext(current.session,System.currentTimeMillis()+(schedule()?.interval() ?: 60_000)) }
-                work=null; transition(Stage.COMPLETED); next()
+            val factsToSave=verified.copy(observation=Observation.FOLLOW)
+            if(store.accountFilter().evaluate(verified).second!=Eligibility.ELIGIBLE) {
+                skipIneligible(current,factsToSave)
             } else {
+                store.saveScan(current.key,factsToSave)
                 generation++; transition(Stage.READY_FOR_ACTION); afterAction=true
                 transition(Stage.AWAITING_USER_ACTION); executor.requestUserAction(current.key); watchUserAction(generation)
             }
         } }
+    }
+    private fun skipIneligible(current: Work,facts: ProfileFacts) {
+        val eligibility=store.accountFilter().evaluate(facts)
+        generation++
+        store.transaction {
+            store.saveScan(current.key,facts)
+            store.deferFiltered(current,eligibility.second,eligibility.third)
+            store.setNext(current.session,System.currentTimeMillis()+(schedule()?.interval() ?: 60_000))
+        }
+        work=null; transition(Stage.COMPLETED); next()
+    }
+    private fun inspectUnknownProfile(token: Int,current: Work) {
+        browser()?.facts(current.key) { facts -> withStorageGuard {
+            if(token!=generation || !running || !allowed()) return@withStorageGuard
+            if(facts.reason in setOf("LOGIN_REQUIRED","ACTION_RESTRICTED")) { fail(facts.reason); return@withStorageGuard }
+            val stable=unknownFacts==facts
+            unknownFacts=facts; factsResponseAt=System.currentTimeMillis()
+            val identifiable=facts.privacy!=Privacy.UNKNOWN || facts.count!=null || facts.reason=="PROFILE_UNAVAILABLE"
+            if(stable && identifiable && store.accountFilter().evaluate(facts).second!=Eligibility.ELIGIBLE) {
+                skipIneligible(current,facts)
+            } else post(1000) { poll(token) }
+        } }
+    }
+    private fun pageTimedOut() {
+        val current=work
+        if(enforceFilters && !refreshed && !afterAction && current!=null && unknownFacts!=null && System.currentTimeMillis()-factsResponseAt<3500) {
+            skipIneligible(current,ProfileFacts(reason="UNKNOWN_PAGE_STATE"))
+        } else fail("VERIFICATION_TIMEOUT")
     }
     private fun watchUserAction(token: Int) {
         post(2000) {

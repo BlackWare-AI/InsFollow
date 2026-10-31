@@ -91,3 +91,10 @@ Local follow-up APKs: debug 2,890,263 bytes, SHA-256 `c031058cfe45264203c07dbf1e
 New source adds conservative follower intervals and filters, weekly-window JVM tests, plus native tests for unique/persistent scans, recovery, independent follow history, recalculation, eligible queue order, schema migration/legacy restore, scan exports, read-only execution, restriction pause, late callbacks, direct filters, budgets and same-instance Home/Browser switching. These fixtures use fictional local profiles only. Earlier passing results above do not validate this extension. Current build/CI evidence will be recorded after the updated tests finish.
 
 No physical Android device is attached in this environment. Physical-device Home/Browser continuity, hidden/minimal WebView rendering, genuine Instagram login/DOM variants/security file upload, public/private classification and specific InstaPro import compatibility remain unverified. Public empty-post accounts and already-followed private/public ambiguity deliberately require review. No real follow operations are used in automated tests.
+
+
+## Filtered-profile continuation fix
+
+Responsive profiles with unreadable privacy/counts previously ended scanning at its deadline, and an unknown Follow control prevented direct-mode eligibility inspection. The fix records review/filtered observations without changing follow codes and advances after the persisted scheduling deadline. It does not reshuffle an existing queue. Missing browser callbacks, security/login restrictions and post-action verification timeouts still pause safely; schedule/target limits remain effective.
+
+New deterministic instrumentation covers private-profile rejection, below-threshold profiles with an unknown Follow control, responsive unknown-profile review, and scan continuation. Tests verify original persisted order, no next navigation before the stored deadline, no follow requests, intact follow codes and unchanged safety stops. Validation results are pending this change's build and CI; earlier passing results do not validate this fix. No physical-device or live Instagram result is claimed.

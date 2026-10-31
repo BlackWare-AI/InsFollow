@@ -103,6 +103,22 @@ class ScanDeviceTest : InstrumentationTestCase() {
         assertEquals(2,browser.visits.distinct().size); assertEquals(2,browser.visits.size); assertEquals(2,store.scanResults().size); assertEquals(0,count("operations"))
         assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
     }
+    fun testResponsiveUnknownScanContinuesInSavedOrderAfterInterval() {
+        val run=store.createScan(ScanPolicy.ALL)
+        val order=store.readableDatabase.rawQuery("SELECT accountKey FROM scan_queue WHERE runId=? ORDER BY position",arrayOf(run.toString())).use { c -> buildList { while(c.moveToNext()) add(c.getString(0)) } }
+        val visits=mutableListOf<String>(); val starts=mutableListOf<Pair<Long,Long>>()
+        val browser=object: ProfileBrowser {
+            override fun profile(key: String) { visits.add(key); starts.add(System.currentTimeMillis() to store.scanNextAt(run)) }
+            override fun facts(key: String,result: (ProfileFacts)->Unit) { result(ProfileFacts()) }
+            override fun inspect(key: String,result: (Observation)->Unit) { result(Observation.UNKNOWN) }
+        }
+        instrumentation.runOnMainSync { engine=ScanWorkflow(store,{browser},{true},{1000},{},{},{},3500).also { it.start(ScanPolicy.ALL) } }
+        waitUntil { engine?.running==false }
+        assertEquals(order,visits); assertEquals(2,store.scanResults().size)
+        assertTrue(store.scanResults().all { it.eligibility==Eligibility.REVIEW })
+        assertTrue(starts[1].second>0); assertTrue(starts[1].first>=starts[1].second)
+        assertEquals(0,count("operations")); assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
+    }
     fun testMissingCallbackDeadlinePausesInsteadOfDrainingScan() {
         val browser=object: ProfileBrowser {
             override fun profile(key: String) {}
