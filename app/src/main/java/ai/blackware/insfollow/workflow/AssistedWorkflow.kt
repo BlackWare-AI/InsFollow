@@ -8,7 +8,7 @@ import ai.blackware.insfollow.queue.Schedule
 import ai.blackware.insfollow.web.ProfileBrowser
 import java.time.LocalDateTime
 
-/** Follow execution is deliberately a separate user-only capability. */
+/** Requests user action only if a guarded browser Follow attempt could not be dispatched. */
 interface FollowExecutor { fun requestUserAction(account: String) }
 class AssistedWorkflow(
     private val store: Store,
@@ -126,9 +126,7 @@ class AssistedWorkflow(
                 if(!refreshed && observation==Observation.FOLLOW && enforceFilters) {
                     inspectEligibility(token,current)
                 } else if(!refreshed && observation==Observation.FOLLOW) {
-                    generation++; transition(Stage.READY_FOR_ACTION); afterAction=true
-                    transition(Stage.AWAITING_USER_ACTION); executor.requestUserAction(current.key)
-                    watchUserAction(generation)
+                    triggerFollow(token,current)
                 } else if(!refreshed) {
                     refreshed=true; refresh()
                 } else {
@@ -149,8 +147,7 @@ class AssistedWorkflow(
                 skipIneligible(current,factsToSave)
             } else {
                 store.saveScan(current.key,factsToSave)
-                generation++; transition(Stage.READY_FOR_ACTION); afterAction=true
-                transition(Stage.AWAITING_USER_ACTION); executor.requestUserAction(current.key); watchUserAction(generation)
+                triggerFollow(token,current)
             }
         } }
     }
@@ -181,6 +178,44 @@ class AssistedWorkflow(
         if(enforceFilters && !refreshed && !afterAction && current!=null && unknownFacts!=null && System.currentTimeMillis()-factsResponseAt<3500) {
             skipIneligible(current,ProfileFacts(reason="UNKNOWN_PAGE_STATE"))
         } else fail("VERIFICATION_TIMEOUT")
+    }
+    /**
+     * A DOM click is an attempt, not a confirmed Follow. Persist the possible action
+     * before dispatch so an interrupted callback can only resume at verification.
+     */
+    private fun triggerFollow(token: Int, current: Work) {
+        if (token != generation || !running || work?.operation != current.operation || !guard()) return
+        val session = browser() ?: run { fail("RENDERER_GONE"); return }
+        generation++
+        val attempt = generation
+        afterAction = true
+        transition(Stage.READY_FOR_ACTION)
+
+        // A lost WebView callback must never hang the workflow or cause a blind retry.
+        post(pageTimeoutMs) {
+            if (attempt == generation && running && stage == Stage.READY_FOR_ACTION && allowed())
+                fail("VERIFICATION_TIMEOUT")
+        }
+        session.follow(current.key) { clicked ->
+            withStorageGuard {
+                if (attempt != generation || !running || stage != Stage.READY_FOR_ACTION ||
+                    work?.operation != current.operation || !allowed()) return@withStorageGuard
+                if (clicked) {
+                    transition(Stage.REFRESHING_PROFILE)
+                    post(1500) {
+                        if (attempt == generation && running &&
+                            work?.operation == current.operation && guard()) {
+                            refreshed = true
+                            refresh()
+                        }
+                    }
+                } else {
+                    transition(Stage.AWAITING_USER_ACTION)
+                    executor.requestUserAction(current.key)
+                    watchUserAction(attempt)
+                }
+            }
+        }
     }
     private fun watchUserAction(token: Int) {
         post(2000) {
