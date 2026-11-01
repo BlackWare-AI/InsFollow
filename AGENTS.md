@@ -6,8 +6,8 @@ Read README.md and docs/VALIDATION.md before making changes.
 - data/: bounded Favorites parsing, SQLite transactions, exports and backup.
 - model/: stable statuses and reason codes.
 - queue/: unique persisted queue and local-time scheduling.
-- web/: one System WebView; isolated read-only DOM inspection.
-- workflow/: assisted state machine; no automatic Follow execution.
+- web/: one System WebView; isolated DOM inspection and narrowly scoped Follow click.
+- workflow/: state machine with at-most-once DOM click dispatch, manual fallback and independent refresh verification.
 - ui/: inline AMOLED interface, resources in English and Turkish.
 
 Never modify INSFAV, INSFAV Plus, INSFAV Thumb Fetcher or their data.
@@ -16,7 +16,7 @@ replace a confirmed result with uncertainty, or strip original display-name suff
 Preserve imported JSON, folder ordering, pageId values, unrelated fields and operation history.
 Use transactions, parameterized SQL, SAF, bounded untrusted input and no authentication exports.
 Do not add modals, another navigation Activity, telemetry, services, broad permissions,
-a JavaScript bridge, automatic follows, token interception or evasion mechanisms.
+a JavaScript bridge, token interception or evasion mechanisms. Keep Follow attempts tied to a verified profile and one live operation; never retry a possible action after interruption.
 All visible text must have English and Turkish Android resources.
 
 Run `./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease` for substantive changes.
