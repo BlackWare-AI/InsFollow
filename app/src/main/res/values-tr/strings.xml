@@ -26,7 +26,7 @@
     <string name="collapse">Tarayıcıyı daralt</string>
     <string name="login">Giriş yap / Instagram aç</string>
     <string name="verify">İşlem yaptım — yenile ve doğrula</string>
-    <string name="browser_help">Instagram’ın kendi arayüzünü kullanın. InsFollow Takip Et düğmesine basmaz. Daraltma işlemi duraklatır; devam etmek için genişletip sürdürün.</string>
+    <string name="browser_help">Doğrulanmış Takip Et düğmesi bulunduğunda InsFollow bir kez tıklamayı dener, sonra yenileyerek sonucu doğrular. Tıklama yapılamazsa işlemi elle yapıp doğrulayın. Daraltma işlemi duraklatır.</string>
     <string name="current_account">Hesap: %1$s · %2$s</string>
     <string name="start_resume">Başlat / Sürdür</string>
     <string name="pause">Duraklat</string>

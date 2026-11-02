@@ -28,6 +28,14 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         var onProfile: (String)->Unit = {}
         var navigations = 0
         var inspections = 0
+        var clicks = 0
+        var clickResult = false
+        var deferClick = false
+        var followCallback: ((Boolean) -> Unit)? = null
+        override fun follow(key: String, result: (Boolean) -> Unit) {
+            clicks++
+            if (deferClick) followCallback = result else result(clickResult)
+        }
         var defer = false
         var callback: ((Observation) -> Unit)? = null
         override fun profile(key: String) { navigations++; visits.add(key); onProfile(key) }
@@ -105,6 +113,88 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         awaitCondition { actions==1 }; assertEquals(Stage.AWAITING_USER_ACTION,workflow!!.stage)
         assertTrue(store.accounts().all { it.status==Status.UNPROCESSED })
     }
+    fun testAutomaticFollowRequiresRefreshedFollowingEvidence() {
+        val browser = FixtureBrowser(Observation.FOLLOW).apply {
+            clickResult = true
+            onProfile = { if (navigations == 2) observation = Observation.FOLLOWING }
+        }
+        start(browser)
+        awaitCondition { workflow?.running == false }
+        assertEquals(Status.SUCCESS, finishedAccount().status)
+        assertEquals("FOLLOWING_VERIFIED", finishedAccount().reason)
+        assertEquals(1, browser.clicks)
+        assertEquals(0, actions)
+        assertEquals(2, browser.navigations)
+    }
+
+    fun testAutomaticClickWithoutFollowConfirmationIsFailure() {
+        val browser = FixtureBrowser(Observation.FOLLOW).apply { clickResult = true }
+        start(browser)
+        awaitCondition { workflow?.running == false }
+        assertEquals(Status.FAILURE, finishedAccount().status)
+        assertEquals("FOLLOW_NOT_CONFIRMED", finishedAccount().reason)
+        assertEquals(1, browser.clicks)
+        assertEquals(0, actions)
+    }
+
+    fun testAutomaticClickCanProducePendingRequest() {
+        val browser = FixtureBrowser(Observation.FOLLOW).apply {
+            clickResult = true
+            onProfile = { if (navigations == 2) observation = Observation.REQUESTED }
+        }
+        start(browser)
+        awaitCondition { workflow?.running == false }
+        assertEquals(Status.REQUESTED, finishedAccount().status)
+        assertEquals(1, browser.clicks)
+        assertEquals(0, actions)
+    }
+
+    fun testFilteredEligibleAccountUsesAutomaticAttempt() {
+        val browser = FixtureBrowser(Observation.FOLLOW).apply {
+            clickResult = true
+            onProfile = { if (navigations == 2) observation = Observation.FOLLOWING }
+        }
+        start(browser, filters = true)
+        awaitCondition { workflow?.running == false }
+        assertEquals(Status.SUCCESS, finishedAccount().status)
+        assertEquals(1, browser.clicks)
+        assertEquals(0, actions)
+    }
+
+    fun testFailedDomClickFallsBackToManualAction() {
+        val browser = FixtureBrowser(Observation.FOLLOW)
+        start(browser)
+        awaitCondition { workflow?.stage == Stage.AWAITING_USER_ACTION }
+        assertEquals(1, browser.clicks)
+        assertEquals(1, actions)
+        assertEquals(Status.UNPROCESSED, finishedAccount().status)
+    }
+
+    fun testLateFollowCallbackAfterPauseCannotRefreshOrRetry() {
+        val browser = FixtureBrowser(Observation.FOLLOW).apply { deferClick = true }
+        start(browser)
+        awaitCondition { browser.followCallback != null }
+        instrumentation.runOnMainSync {
+            workflow!!.pause()
+            browser.followCallback!!.invoke(true)
+        }
+        assertFalse(workflow!!.running)
+        assertEquals(1, browser.navigations)
+        assertEquals(1, browser.clicks)
+        assertEquals(Status.UNPROCESSED, finishedAccount().status)
+        assertNotNull(store.current())
+    }
+
+    fun testMissingFollowCallbackTimesOutWithoutRetry() {
+        val browser = FixtureBrowser(Observation.FOLLOW).apply { deferClick = true }
+        start(browser, timeout = 3_000)
+        awaitCondition { workflow?.running == false }
+        assertEquals(Status.UNCERTAIN, finishedAccount().status)
+        assertEquals("VERIFICATION_TIMEOUT", finishedAccount().reason)
+        assertEquals(1, browser.clicks)
+        assertEquals(0, actions)
+    }
+
     fun testDailyTargetBlocksNewNavigation() {
         val id=store.createQueue(); store.finish(store.acquire(id)!!,Verdict(Status.ALREADY,"FOLLOWING_VERIFIED"),"FOLLOWING")
         val browser=FixtureBrowser(Observation.FOLLOW)

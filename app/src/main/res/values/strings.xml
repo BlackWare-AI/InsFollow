@@ -26,7 +26,7 @@
     <string name="collapse">Collapse browser</string>
     <string name="login">Sign in / open Instagram</string>
     <string name="verify">I have acted — refresh and verify</string>
-    <string name="browser_help">Use Instagram’s genuine interface. InsFollow never presses Follow. Collapsing pauses processing; expand and resume to continue.</string>
+    <string name="browser_help">When a verified Follow control is found, InsFollow attempts one click and then refreshes to verify the result. If the click is unavailable, act manually and tap verify. Collapsing pauses processing.</string>
     <string name="current_account">Account: %1$s · %2$s</string>
     <string name="start_resume">Start / Resume</string>
     <string name="pause">Pause</string>
