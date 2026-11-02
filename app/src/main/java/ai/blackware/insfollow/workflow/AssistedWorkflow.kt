@@ -6,6 +6,7 @@ import ai.blackware.insfollow.data.*
 import ai.blackware.insfollow.model.*
 import ai.blackware.insfollow.queue.Schedule
 import ai.blackware.insfollow.web.ProfileBrowser
+import ai.blackware.insfollow.web.FollowAttempt
 import java.time.LocalDateTime
 
 /** Requests user action only if a guarded browser Follow attempt could not be dispatched. */
@@ -34,7 +35,7 @@ class AssistedWorkflow(
     private var failures=0
     private var unknownFacts: ProfileFacts?=null
     private var factsResponseAt=0L
-    private val stopReasons=setOf("ACTION_RESTRICTED","LOGIN_REQUIRED","RENDERER_GONE","NAVIGATION_BLOCKED","VERIFICATION_TIMEOUT")
+    private val stopReasons=setOf("ACTION_RESTRICTED","LOGIN_REQUIRED","RENDERER_GONE","NAVIGATION_BLOCKED","VERIFICATION_TIMEOUT","FOLLOW_ACTION_UNCERTAIN")
     private fun withStorageGuard(action: () -> Unit) {
         try { action() } catch (_: android.database.SQLException) { storageFailure() }
     }
@@ -196,11 +197,15 @@ class AssistedWorkflow(
             if (attempt == generation && running && stage == Stage.READY_FOR_ACTION && allowed())
                 fail("VERIFICATION_TIMEOUT")
         }
-        session.follow(current.key) { clicked ->
+        session.follow(current.key) { outcome ->
             withStorageGuard {
                 if (attempt != generation || !running || stage != Stage.READY_FOR_ACTION ||
                     work?.operation != current.operation || !allowed()) return@withStorageGuard
-                if (clicked) {
+                if(outcome==FollowAttempt.LOGIN_REQUIRED || outcome==FollowAttempt.RESTRICTED || outcome==FollowAttempt.UNCERTAIN) {
+                    fail(when(outcome) { FollowAttempt.LOGIN_REQUIRED -> "LOGIN_REQUIRED"; FollowAttempt.RESTRICTED -> "ACTION_RESTRICTED"; else -> "FOLLOW_ACTION_UNCERTAIN" })
+                    return@withStorageGuard
+                }
+                if (outcome==FollowAttempt.DISPATCHED) {
                     transition(Stage.REFRESHING_PROFILE)
                     post(1500) {
                         if (attempt == generation && running &&

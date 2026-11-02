@@ -89,14 +89,14 @@ class BrowserSession(private val activity: Activity, val events: Events) : Profi
             result(observation)
         }
     }
-    override fun follow(key: String, result: (Boolean) -> Unit) {
-        if (destroyed || expected != Identity.normalize(key)) { result(false); return }
+    override fun follow(key: String, result: (FollowAttempt) -> Unit) {
+        if (destroyed || expected != Identity.normalize(key)) { result(FollowAttempt.UNCERTAIN); return }
         val script = activity.resources.openRawResource(R.raw.click_follow)
             .bufferedReader().use { it.readText() }
             .replace("__EXPECTED__", JSONObject.quote(key))
         view.evaluateJavascript(script) { raw ->
             val status = runCatching { JSONTokener(raw).nextValue() as String }.getOrDefault("FAILED")
-            result(!destroyed && status == "CLICKED")
+            result(if(destroyed) FollowAttempt.UNCERTAIN else FollowAttempt.fromScript(status))
         }
     }
     override fun facts(key: String, result: (ProfileFacts) -> Unit) {

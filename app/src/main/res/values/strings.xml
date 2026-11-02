@@ -154,4 +154,5 @@
     <string name="filtered">Filtered</string>
     <string name="review">Review required</string>
     <string name="awaiting_rescan">Awaiting scan / rescan (old observation retained)</string>
+    <string name="follow_action_uncertain">Follow attempt is uncertain or the page state changed. Processing paused; review the browser before rechecking.</string>
 </resources>
