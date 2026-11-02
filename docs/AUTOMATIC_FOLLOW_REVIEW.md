@@ -55,8 +55,8 @@ real layouts, platform authorization/compliance and production signing remain un
 
 Automatic Follow cannot be certified as reliable from the current evidence. Dispatch-time
 security/state checks and their failing regressions need resolution before that claim.
-The review PR remains a draft with reproducible failing tests; no production fix or APK
-release is included.
+The original review revision contained reproducible failing tests and no production fix.
+The remediation below addresses them; no production APK release is included.
 
 
 ## Remediation
@@ -65,4 +65,4 @@ The dispatch script now checks login/restriction markers and competing relations
 
 ProfileBrowser returns typed FollowAttempt outcomes. Only NOT_DISPATCHED permits manual fallback. LOGIN_REQUIRED and RESTRICTED stop with their existing reason codes; UNCERTAIN stops as U / FOLLOW_ACTION_UNCERTAIN without retry or manual-action prompting. Existing refreshed relationship verification is unchanged. No Follow click or acknowledgement alone establishes S.
 
-The original failing fixtures remain, with additional cases for Turkish restrictions, Requested conflicts, Following-only state, DOM changes during scroll and exceptions after dispatch. Workflow fixtures cover propagation of login/restriction/uncertain outcomes, and JVM tests cover conservative script-result mapping. Remediation validation is pending the updated build and CI. No physical-device or live Instagram compatibility is claimed.
+The original failing fixtures remain, with additional cases for Turkish restrictions, Requested conflicts, Following-only state, DOM changes during scroll and exceptions after dispatch. Workflow fixtures cover propagation of login/restriction/uncertain outcomes, and JVM tests cover conservative script-result mapping. Remediation CI [41389104591](https://github.com/BlackWare-AI/InsFollow/actions/runs/41389104591), application/test source `f48e9df`, completed successfully: **59 JVM tests** and **91 instrumentation tests on each of API 34 and 36**, zero failures/errors/skips. The original three negative fixtures now pass on both APIs. CI lint has zero errors and two version warnings; debug/release/test APK builds and emulator reinstall/launch checks passed. Local compilation, JVM tests, lint, script syntax and APK identity/version verification also passed. No physical-device or live Instagram compatibility is claimed.
