@@ -2,6 +2,8 @@
 
 ## 0.1 — Unreleased
 
+Fixed dispatch-time Follow guards for inline restrictions, login forms and conflicting relationship controls. Revalidate after scrolling; propagate blocked/uncertain outcomes separately from definite non-dispatch so they pause rather than offer blind manual fallback.
+
 Fixed workflow stalls on responsive profiles with unreadable facts or Follow controls. Filter/review skips preserve follow codes, configured waiting intervals and persistent queue order; security and unresponsive-browser stops remain enforced.
 
 Initial assisted-workflow implementation: Favorites import and normalization, SQLite operation history, persistent unique shuffled queues, one-screen AMOLED Views interface, English/Turkish resources, a single expandable System WebView, conservative read-only inspection, user action and refresh verification, schedules, recovery, JSON/TXT and annotated exports, local backup/restore, tests and GitHub workflows.

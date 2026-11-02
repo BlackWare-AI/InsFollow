@@ -60,4 +60,31 @@ class FollowClickDeviceTest : ActivityInstrumentationTestCase2<MainActivity>(Mai
     fun testInlineRestrictionDoesNotClick() = assertNoClick(fixture(follow,"<p>Try again later. We restrict certain activity.</p>"))
     fun testLoginOverlayDoesNotClick() = assertNoClick(fixture(follow,"<input type='password' aria-label='Password'>"))
     fun testConflictingFollowingStateDoesNotClick() = assertNoClick(fixture("<button>Following</button>"+follow))
+    fun testTurkishRestrictionDoesNotClick() {
+        val r=fixture(follow,"<p>İŞLEM ENGELLENDİ</p>"); assertNoClick(r); assertEquals("RESTRICTED",r.getString("status"))
+    }
+    fun testRequestedConflictDoesNotClick() {
+        val r=fixture("<button>Requested</button>"+follow); assertNoClick(r); assertEquals("AMBIGUOUS",r.getString("status"))
+    }
+    fun testFollowingOnlyDoesNotClick() {
+        val r=fixture("<button onclick='record(event)'>Following</button>"); assertNoClick(r); assertEquals("STATE_CHANGED",r.getString("status"))
+    }
+    fun testRestrictionAppearingDuringScrollDoesNotClick() {
+        val setup="<script>document.querySelector('button').scrollIntoView=function(){document.querySelector('main').insertAdjacentHTML('afterbegin','<p>Try again later</p>');};</script>"
+        val r=fixture(follow+setup); assertNoClick(r); assertEquals("RESTRICTED",r.getString("status"))
+    }
+    fun testReplacedButtonDuringScrollDoesNotClick() {
+        val setup="<script>document.querySelector('button').scrollIntoView=function(){this.outerHTML=this.outerHTML;};</script>"
+        val r=fixture(follow+setup); assertNoClick(r); assertEquals("AMBIGUOUS",r.getString("status"))
+    }
+    fun testExceptionAfterDispatchIsUncertainWithoutRetry() {
+        val setup="<script>document.querySelector('button').click=function(){HTMLElement.prototype.click.call(this);throw new Error('fixture');};</script>"
+        val r=fixture(follow+setup); assertEquals(1,r.getInt("clicks")); assertEquals("UNCERTAIN",r.getString("status"))
+    }
+
+    fun testRestrictionRaisedByClickIsNotReportedAsSafeDispatch() {
+        val button="<button onclick=\"record(event);document.querySelector('main').insertAdjacentHTML('afterbegin','<p>Try again later</p>');\">Follow</button>"
+        val r=fixture(button); assertEquals(1,r.getInt("clicks")); assertEquals("RESTRICTED",r.getString("status"))
+    }
+
 }

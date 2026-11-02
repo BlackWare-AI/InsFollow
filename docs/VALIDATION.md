@@ -108,3 +108,8 @@ Deterministic instrumentation fixtures were added for success, unconfirmed click
 ## Automatic Follow review — 2026-11-02
 
 The earlier "tests not executed" note is superseded by [AUTOMATIC_FOLLOW_REVIEW.md](AUTOMATIC_FOLLOW_REVIEW.md). Main source `617bfe5` has passing existing CI, but the new real-WebView script fixtures expose three missing final guards. Review run [41387760073](https://github.com/BlackWare-AI/InsFollow/actions/runs/41387760073), test source `f919c50`, uploaded complete reports on each of API 34/36 containing 81 tests: 78 passed, 3 failed, zero errors/skips. The workflow failed; API 34's job was cancelled by fail-fast after producing its full test report. Restrictions, login forms and competing Following/Follow controls failed to prevent a click in the local dispatch fixtures. These tests use no real follow operations and do not prove Instagram acceptance. Production code is unchanged; the review remains a draft, not a production fix or release.
+
+
+## Automatic Follow guard remediation
+
+The three review failures are addressed in the dispatch script, with repeat guards after scroll and typed browser outcomes propagated into safe workflow stops. Missing, unexpected or ambiguous results never imply a definite non-click and cannot trigger a blind manual fallback. Refreshed independent verification, persisted possible-action state, existing account history and version 0.1 remain unchanged. Additional local WebView/workflow fixtures and conservative mapping tests are included. Build and CI results are pending; the earlier review failures remain historical evidence, not a claim that the remediation passed. Physical-device/live Instagram/signing gates remain open.

@@ -1,6 +1,6 @@
-# Automatic Follow review — 2026-11-02
+# Automatic Follow review and remediation — 2026-11-02
 
-Reviewed application source: `617bfe5` (main at review start). Test source: `f919c50`.
+Historical review (before the remediation below). Reviewed application source: `617bfe5` (main at review start). Test source: `f919c50`.
 Production application code was not changed by this review. No real Instagram pages,
 authenticated sessions or follow operations were used.
 
@@ -57,3 +57,12 @@ Automatic Follow cannot be certified as reliable from the current evidence. Disp
 security/state checks and their failing regressions need resolution before that claim.
 The review PR remains a draft with reproducible failing tests; no production fix or APK
 release is included.
+
+
+## Remediation
+
+The dispatch script now checks login/restriction markers and competing relationship states immediately before clicking, revalidates after scrolling, and requires the identical button node. Both English and Turkish restriction casing are recognized. Immediate login/restriction results raised by a click are also surfaced. Exceptions after a possible dispatch return uncertainty.
+
+ProfileBrowser returns typed FollowAttempt outcomes. Only NOT_DISPATCHED permits manual fallback. LOGIN_REQUIRED and RESTRICTED stop with their existing reason codes; UNCERTAIN stops as U / FOLLOW_ACTION_UNCERTAIN without retry or manual-action prompting. Existing refreshed relationship verification is unchanged. No Follow click or acknowledgement alone establishes S.
+
+The original failing fixtures remain, with additional cases for Turkish restrictions, Requested conflicts, Following-only state, DOM changes during scroll and exceptions after dispatch. Workflow fixtures cover propagation of login/restriction/uncertain outcomes, and JVM tests cover conservative script-result mapping. Remediation validation is pending the updated build and CI. No physical-device or live Instagram compatibility is claimed.

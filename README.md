@@ -1,6 +1,6 @@
 # InsFollow
 
-InsFollow **0.1** is an independent, open-source Android companion for managing Instagram follow workflows from InstaPro Favorites backups. It keeps account records on your device and guides you through actions in Instagram’s genuine website. InsFollow attempts one guarded Follow click after stable profile observation, then refreshes and records only observable results. If a click cannot be dispatched, you can act manually.
+InsFollow **0.1** is an independent, open-source Android companion for managing Instagram follow workflows from InstaPro Favorites backups. It keeps account records on your device and guides you through actions in Instagram’s genuine website. InsFollow attempts one guarded Follow click after stable profile observation, then refreshes and records only observable results. Only a definite non-dispatch offers manual fallback; login, restrictions and uncertain outcomes pause processing.
 
 This repository is initial development. Build and test evidence, unverified behavior and release gates are recorded in [docs/VALIDATION.md](docs/VALIDATION.md). A compiling APK does not establish live Instagram compatibility or release readiness.
 
@@ -28,7 +28,7 @@ This repository is initial development. Build and test evidence, unverified beha
 3. Expand **Instagram session**, choose **Sign in / open Instagram**, and log in on Instagram’s website.
 4. Configure intervals and operating hours inline. Equal start/end times allow all day. A zero session limit means unlimited. These preferences do not guarantee account safety.
 5. Choose **Start / Resume**. An unfinished queue always resumes its saved order. Completed S/A/R/F accounts are excluded from new queues by default.
-6. A verified Follow control is clicked once where possible, after eligibility checks. The app refreshes and verifies the resulting state; if the click cannot be dispatched, use the browser control and **I have acted — refresh and verify**. A click alone never establishes success.
+6. A verified Follow control is clicked once where possible, after eligibility checks. The app refreshes and verifies the resulting state; if the click cannot be dispatched, use the browser control and **I have acted — refresh and verify**. A click alone never establishes success. Immediately before dispatch, the script rechecks login/restriction notices and competing Following/Requested states. It checks again after scrolling and requires the same button node. A possible dispatched event followed by an exception remains uncertain and is not retried or presented as a definite non-click.
 7. Review verified results and uncertain observations. Recheck a record explicitly when necessary; choose Direct processing to revalidate a deliberately rechecked confirmed record. Rechecking appends work to the current queue without deleting its history.
 8. Export reports or a separate annotated Favorites copy through the system file picker.
 

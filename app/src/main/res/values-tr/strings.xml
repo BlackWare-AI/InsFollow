@@ -154,4 +154,5 @@
     <string name="filtered">Filtrelenen</string>
     <string name="review">İnceleme bekleyen</string>
     <string name="awaiting_rescan">Tarama / yeniden tarama bekliyor (eski gözlem korunur)</string>
+    <string name="follow_action_uncertain">Takip denemesi belirsiz veya sayfa durumu değişti. İşlem duraklatıldı; yeniden kontrol etmeden önce tarayıcıyı inceleyin.</string>
 </resources>

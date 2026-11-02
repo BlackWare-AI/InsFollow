@@ -8,6 +8,7 @@ import ai.blackware.insfollow.data.dailyReport
 import ai.blackware.insfollow.model.*
 import ai.blackware.insfollow.queue.Schedule
 import ai.blackware.insfollow.web.ProfileBrowser
+import ai.blackware.insfollow.web.FollowAttempt
 import ai.blackware.insfollow.workflow.AssistedWorkflow
 import ai.blackware.insfollow.workflow.FollowExecutor
 import java.time.LocalTime
@@ -30,11 +31,12 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         var inspections = 0
         var clicks = 0
         var clickResult = false
+        var attemptOverride: FollowAttempt? = null
         var deferClick = false
-        var followCallback: ((Boolean) -> Unit)? = null
-        override fun follow(key: String, result: (Boolean) -> Unit) {
+        var followCallback: ((FollowAttempt) -> Unit)? = null
+        override fun follow(key: String, result: (FollowAttempt) -> Unit) {
             clicks++
-            if (deferClick) followCallback = result else result(clickResult)
+            if (deferClick) followCallback = result else result(attemptOverride ?: if(clickResult) FollowAttempt.DISPATCHED else FollowAttempt.NOT_DISPATCHED)
         }
         var defer = false
         var callback: ((Observation) -> Unit)? = null
@@ -176,7 +178,7 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         awaitCondition { browser.followCallback != null }
         instrumentation.runOnMainSync {
             workflow!!.pause()
-            browser.followCallback!!.invoke(true)
+            browser.followCallback!!.invoke(FollowAttempt.DISPATCHED)
         }
         assertFalse(workflow!!.running)
         assertEquals(1, browser.navigations)
@@ -195,6 +197,17 @@ class WorkflowDeviceTest : InstrumentationTestCase() {
         assertEquals(0, actions)
     }
 
+    private fun assertAttemptStops(outcome: FollowAttempt,reason: String) {
+        val browser=FixtureBrowser(Observation.FOLLOW).apply { attemptOverride=outcome }
+        start(browser)
+        awaitCondition { workflow?.running==false }
+        assertEquals(1,browser.clicks); assertEquals(0,actions); assertEquals(1,browser.navigations)
+        assertEquals(Status.UNCERTAIN,finishedAccount().status); assertEquals(reason,finishedAccount().reason)
+        assertTrue(reason in messages); assertNull(store.current())
+    }
+    fun testDispatchTimeLoginStopsWithoutManualFallback() = assertAttemptStops(FollowAttempt.LOGIN_REQUIRED,"LOGIN_REQUIRED")
+    fun testDispatchTimeRestrictionStopsWithoutManualFallback() = assertAttemptStops(FollowAttempt.RESTRICTED,"ACTION_RESTRICTED")
+    fun testUncertainDispatchStopsWithoutManualFallbackOrRetry() = assertAttemptStops(FollowAttempt.UNCERTAIN,"FOLLOW_ACTION_UNCERTAIN")
     fun testDailyTargetBlocksNewNavigation() {
         val id=store.createQueue(); store.finish(store.acquire(id)!!,Verdict(Status.ALREADY,"FOLLOWING_VERIFIED"),"FOLLOWING")
         val browser=FixtureBrowser(Observation.FOLLOW)
