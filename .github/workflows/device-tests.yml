@@ -41,7 +41,7 @@ jobs:
             adb shell am start -W -n ai.blackware.insfollow/.ui.MainActivity > startup-api-${{ matrix.api }}.txt
             python3 -c "from pathlib import Path; text = Path('startup-api-${{ matrix.api }}.txt').read_text(); print(text); assert 'Status: ok' in text, 'Startup failed'"
             adb shell dumpsys webviewupdate > webview-api-${{ matrix.api }}.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: device-reports-api-${{ matrix.api }}
