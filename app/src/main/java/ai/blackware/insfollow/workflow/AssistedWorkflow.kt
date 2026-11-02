@@ -1,5 +1,4 @@
 package ai.blackware.insfollow.workflow
-package ai.blackware.insfollow.workflow
 
 import android.os.Handler
 import android.os.Looper
