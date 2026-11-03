@@ -387,10 +387,24 @@ class MainActivity : Activity(), BrowserSession.Events, FollowExecutor {
     } }
     override fun finished() { /* A finished navigation alone never commits a result. */ }
     override fun error(reason: String) { safely { workflow.fail(reason); scanner.fail(reason); showReason(reason) } }
-    override fun rendererGone() { browser=null; safely { workflow.fail("RENDERER_GONE"); scanner.fail("RENDERER_GONE"); workflow.pause(); showReason("RENDERER_GONE") } }
+        override fun rendererGone() {
+        safely {
+            browser?.destroy()
+            browser = null
+            ensureBrowser()
+            workflow.fail("RENDERER_GONE")
+            scanner.fail("RENDERER_GONE")
+            showReason("RENDERER_GONE")
+        }
+    }
     override fun requestUserAction(account: String) { setExpanded(true) }
     override fun onResume() { super.onResume(); foreground=true; if(::workflow.isInitialized) workflow.foreground(true); browser?.resume() }
-    override fun onPause() { foreground=false; if(::scanner.isInitialized) scanner.pause(); if(::workflow.isInitialized) safely { workflow.foreground(false) }; browser?.pause(); super.onPause() }
+    override fun onPause() {
+        super.onPause()
+        foreground=false
+        if(::workflow.isInitialized) safely { workflow.foreground(false) }
+        browser?.pause()
+    }
     override fun onDestroy() {
         destroyed=true
         fileCallback?.onReceiveValue(null); fileCallback=null
