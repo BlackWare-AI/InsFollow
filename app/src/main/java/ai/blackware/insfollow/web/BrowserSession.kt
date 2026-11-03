@@ -23,7 +23,9 @@ class BrowserSession(private val activity: Activity, val events: Events) : Profi
     private var destroyed = false
     private var expected: String? = null
     private var navigation: (() -> Boolean)? = null
-    val view: WebView = create()
+    var view: WebView = create()
+        private set
+
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun create(): WebView = WebView(activity).apply {
         WebView.setWebContentsDebuggingEnabled(false)
@@ -62,20 +64,68 @@ class BrowserSession(private val activity: Activity, val events: Events) : Profi
                 val host=uri.host?.lowercase()
                 val path=uri.path.orEmpty()
                 val allowed=uri.scheme=="https" && host in setOf("www.instagram.com","instagram.com") &&
-                    (expected==null || path.trim('/').equals(expected,true) || path.startsWith("/accounts/") || path.startsWith("/challenge/") || path.startsWith("/checkpoint/"))
+                        (expected==null || path.trim('/').equals(expected,true) || path.startsWith("/accounts/") || path.startsWith("/challenge/") || path.startsWith("/checkpoint/"))
                 if(!allowed) { events.error("NAVIGATION_BLOCKED"); return true }
                 if(navigation?.invoke()==false) return true
                 return false
             }
             override fun onPageStarted(view: WebView,url: String,favicon: Bitmap?) { events.started(url) }
-            override fun onPageFinished(view: WebView,url: String) { CookieManager.getInstance().flush(); events.finished() }
-            override fun onReceivedError(view: WebView,request: WebResourceRequest,error: WebResourceError) { if(request.isForMainFrame) events.error("NETWORK_ERROR") }
-            override fun onReceivedHttpError(view: WebView,request: WebResourceRequest,errorResponse: WebResourceResponse) { if(request.isForMainFrame) events.error(if(errorResponse.statusCode==429) "ACTION_RESTRICTED" else "HTTP_ERROR") }
+            override fun onPageFinished(view: WebView,url: String) {
+                CookieManager.getInstance().flush()
+                val currentExpected = expected
+                if (currentExpected == null || url.contains(currentExpected, ignoreCase = true) || url.contains("/accounts/") || url.contains("/challenge/") || url.contains("/checkpoint/")) {
+                    events.finished()
+                }
+            }
+            override fun onReceivedError(view: WebView,request: WebResourceRequest,error: WebResourceError) {
+                if(request.isForMainFrame) {
+                    val code = if (android.os.Build.VERSION.SDK_INT >= 23) error.errorCode else 0
+                    val reason = when (code) {
+                        WebViewClient.ERROR_TIMEOUT -> "TIMEOUT"
+                        WebViewClient.ERROR_HOST_LOOKUP, WebViewClient.ERROR_CONNECT -> "NETWORK_ERROR"
+                        else -> "NETWORK_ERROR"
+                    }
+                    events.error(reason)
+                }
+            }
+            override fun onReceivedHttpError(view: WebView,request: WebResourceRequest,errorResponse: WebResourceResponse) {
+                if(request.isForMainFrame) {
+                    val reason = when (errorResponse.statusCode) {
+                        429 -> "ACTION_RESTRICTED"
+                        401 -> "LOGIN_REQUIRED"
+                        403 -> "ACTION_RESTRICTED"
+                        404 -> "PROFILE_UNAVAILABLE"
+                        in 500..599 -> "SERVER_ERROR"
+                        else -> "HTTP_ERROR"
+                    }
+                    events.error(reason)
+                }
+            }
             override fun onReceivedSslError(view: WebView,handler: SslErrorHandler,error: android.net.http.SslError) { handler.cancel(); events.error("TLS_ERROR") }
             override fun onRenderProcessGone(view: WebView,detail: RenderProcessGoneDetail): Boolean {
-                this@BrowserSession.destroy(); events.rendererGone(); return true
+                CookieManager.getInstance().flush()
+                val parentGroup = view.parent as? android.view.ViewGroup
+                parentGroup?.removeView(view)
+                view.destroy()
+                events.rendererGone()
+                return true
             }
         }
+    }
+    fun recreate(): WebView {
+        if(destroyed) return view
+        CookieManager.getInstance().flush()
+        val parentGroup = view.parent as? android.view.ViewGroup
+        val index = parentGroup?.indexOfChild(view) ?: -1
+        val params = view.layoutParams
+        parentGroup?.removeView(view)
+        view.stopLoading()
+        view.destroy()
+        view = create()
+        if (parentGroup != null && index >= 0) {
+            parentGroup.addView(view, index, params)
+        }
+        return view
     }
     fun setGuard(guard: () -> Boolean) { navigation=guard }
     override fun profile(key: String) { expected=Identity.normalize(key); view.loadUrl("https://www.instagram.com/$expected/") }
@@ -90,7 +140,7 @@ class BrowserSession(private val activity: Activity, val events: Events) : Profi
         }
     }
     override fun follow(key: String, result: (FollowAttempt) -> Unit) {
-        if (destroyed || expected != Identity.normalize(key)) { result(FollowAttempt.UNCERTAIN); return }
+        if(destroyed || expected != Identity.normalize(key)) { result(FollowAttempt.UNCERTAIN); return }
         val script = activity.resources.openRawResource(R.raw.click_follow)
             .bufferedReader().use { it.readText() }
             .replace("__EXPECTED__", JSONObject.quote(key))
